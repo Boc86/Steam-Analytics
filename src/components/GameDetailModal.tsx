@@ -153,11 +153,11 @@ export const GameDetailModal = ({
         // Hourly buckets for day view
         const h = date.getHours();
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-H${h}`;
-        label = date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' });
+        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(h).padStart(2, '0')}:00`;
       } else if (reviewTimeframe === 'week') {
         // Daily buckets for week view
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-        label = date.toLocaleString(undefined, { month: 'short', day: 'numeric' });
+        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
       } else if (reviewTimeframe === 'month') {
         // Weekly buckets for current month
         const year = date.getFullYear();
@@ -167,15 +167,11 @@ export const GameDetailModal = ({
         const weekStart = new Date(year, month, weekNum * 7 + 1);
         const weekEnd = new Date(year, month, Math.min((weekNum + 1) * 7, new Date(year, month + 1, 0).getDate()));
         key = `${year}-W${weekNum}`;
-        label = `${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}–${weekEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+        label = `${String(weekStart.getMonth() + 1).padStart(2, '0')}/${String(weekStart.getDate()).padStart(2, '0')}-${String(weekEnd.getMonth() + 1).padStart(2, '0')}/${String(weekEnd.getDate()).padStart(2, '0')}`;
       } else if (reviewTimeframe === 'year') {
         // Monthly buckets for last 12 months
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const monthIndex = (currentMonth - 11 + date.getMonth() + 12) % 12;
-        const yearDiff = currentYear - date.getFullYear();
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        label = date.toLocaleString(undefined, { month: 'short', year: '2-digit' });
+        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`;
       } else {
         // Yearly buckets for all-time view
         key = String(date.getFullYear());
