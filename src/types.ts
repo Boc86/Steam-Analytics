@@ -52,6 +52,8 @@ export interface SteamGame {
   deckStatus: DeckStatus;
   protonDB: ProtonDBData;
   reviewHistory: { date: string; positive: number; negative: number; rating: number }[];
+  monthlyHistory: { date: string; positive: number; negative: number; rating: number }[];
+  dailyHistory: { date: string; positive: number; negative: number; rating: number }[];
   playerHistory24h: PlayerHistoryPoint[];
   playerHistory7d: PlayerHistoryPoint[];
   priceHistory: PriceHistoryPoint[];

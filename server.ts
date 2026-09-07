@@ -43,12 +43,16 @@ async function fetchSteamReviewData(appId: number): Promise<{
   rating: number;
   status: string;
   reviewHistory: { date: string; positive: number; negative: number; rating: number }[];
+  monthlyHistory: { date: string; positive: number; negative: number; rating: number }[];
+  dailyHistory: { date: string; positive: number; negative: number; rating: number }[];
 }> {
   try {
     // Use Steam's appreviewhistogram endpoint for historical data (months/years)
     const histogramUrl = `https://store.steampowered.com/appreviewhistogram/${appId}?l=english`;
     const histogramRes = await fetch(histogramUrl);
     let reviewHistory: { date: string; positive: number; negative: number; rating: number }[] = [];
+    let monthlyHistory: { date: string; positive: number; negative: number; rating: number }[] = [];
+    let dailyHistory: { date: string; positive: number; negative: number; rating: number }[] = [];
     let totalPositive = 0;
     let totalNegative = 0;
 
@@ -56,7 +60,7 @@ async function fetchSteamReviewData(appId: number): Promise<{
       const histogramData = await histogramRes.json();
       const results = histogramData?.results || {};
 
-      // Process rollups (long-term monthly/weekly data)
+      // Process rollups (long-term monthly data)
       const rollups = results.rollups || [];
       for (const r of rollups) {
         const dateVal = r.date;
@@ -66,12 +70,15 @@ async function fetchSteamReviewData(appId: number): Promise<{
         const down = r.recommendations_down || 0;
         totalPositive += up;
         totalNegative += down;
-        reviewHistory.push({
+
+        const entry = {
           date: `${isoDate}T00:00:00Z`,
           positive: up,
           negative: down,
           rating: Math.round((up / Math.max(up + down, 1)) * 100),
-        });
+        };
+        reviewHistory.push(entry);
+        monthlyHistory.push(entry);
       }
 
       // Process recent daily data (last 30 days)
@@ -86,17 +93,20 @@ async function fetchSteamReviewData(appId: number): Promise<{
           const down = r.recommendations_down || 0;
           totalPositive += up;
           totalNegative += down;
-          reviewHistory.push({
+
+          const entry = {
             date: `${isoDate}T00:00:00Z`,
             positive: up,
             negative: down,
             rating: Math.round((up / Math.max(up + down, 1)) * 100),
-          });
+          };
+          reviewHistory.push(entry);
+          dailyHistory.push(entry);
         }
       }
     }
 
-    // Sort by date
+    // Sort combined history by date
     reviewHistory.sort((a, b) => a.date.localeCompare(b.date));
 
     // Calculate overall rating from summary if available
@@ -106,9 +116,9 @@ async function fetchSteamReviewData(appId: number): Promise<{
     const rating = total > 0 ? Math.round((positive / total) * 100) : 0;
     const status = rating >= 95 ? 'Overwhelmingly Positive' : rating >= 80 ? 'Very Positive' : rating >= 70 ? 'Positive' : rating >= 40 ? 'Mostly Positive' : 'Mixed';
 
-    return { positive, negative, rating, status, reviewHistory };
+    return { positive, negative, rating, status, reviewHistory, monthlyHistory, dailyHistory };
   } catch {
-    return { positive: 0, negative: 0, rating: 0, status: 'Mixed', reviewHistory: [] };
+    return { positive: 0, negative: 0, rating: 0, status: 'Mixed', reviewHistory: [], monthlyHistory: [], dailyHistory: [] };
   }
 }
 
@@ -349,6 +359,8 @@ app.get('/api/steam/dashboard', async (req, res) => {
           deckStatus: d.platforms?.linux ? 'Verified' : 'Unknown',
           protonDB,
           reviewHistory: reviews.reviewHistory,
+          monthlyHistory: reviews.monthlyHistory,
+          dailyHistory: reviews.dailyHistory,
           playerHistory24h: steamCharts.playerHistory24h,
           playerHistory7d: steamCharts.playerHistory7d,
           priceHistory: [],
@@ -577,6 +589,8 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       deckStatus,
       protonDB,
       reviewHistory: reviews.reviewHistory,
+      monthlyHistory: reviews?.monthlyHistory || reviews.reviewHistory,
+      dailyHistory: reviews?.dailyHistory || [],
       playerHistory24h: steamCharts.playerHistory24h,
       playerHistory7d: steamCharts.playerHistory7d,
       priceHistory: [

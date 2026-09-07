@@ -172,7 +172,16 @@ export const GameDetailModal = ({
   }, [game, chartTimeframe]);
 
   const reviewTrendData = useMemo(() => {
-    const observations = game.reviewHistory
+    // Use monthlyHistory (30 months of rollups) for month/year/all views
+    // Use dailyHistory (last 30 days) for day/week views
+    let source: typeof game.reviewHistory = [];
+    if (reviewTimeframe === 'day' || reviewTimeframe === 'week') {
+      source = game.dailyHistory?.length ? game.dailyHistory : game.reviewHistory;
+    } else {
+      source = game.monthlyHistory?.length ? game.monthlyHistory : game.reviewHistory;
+    }
+
+    const observations = source
       .map((point) => ({ ...point, timestamp: new Date(point.date).getTime() }))
       .filter((point) => Number.isFinite(point.timestamp))
       .sort((a, b) => a.timestamp - b.timestamp);
@@ -189,40 +198,32 @@ export const GameDetailModal = ({
     };
     const filtered = observations.filter((point) => reviewTimeframe === 'all_time' || point.timestamp >= nowTimestamp - ranges[reviewTimeframe]);
 
-    // Separate daily vs monthly data for proper bucketing
-    const isDailyData = (date: Date) => {
-      // Daily data has time component or is within last 30 days
-      return date.getTime() > nowTimestamp - 31 * 24 * 60 * 60 * 1000;
+    // Bucketing config matching concurrent players chart pattern
+    const bucketingConfigs: Record<ConcurrentTimeframe, { bucketSpanMs: number }> = {
+      day: { bucketSpanMs: 3600 * 1000 },        // hourly
+      week: { bucketSpanMs: 24 * 3600 * 1000 },  // daily
+      month: { bucketSpanMs: 7 * 24 * 3600 * 1000 }, // weekly
+      year: { bucketSpanMs: 30 * 24 * 3600 * 1000 }, // monthly
+      all_time: { bucketSpanMs: 365 * 24 * 3600 * 1000 }, // yearly
     };
+    const { bucketSpanMs } = bucketingConfigs[reviewTimeframe];
 
-    // Group by appropriate granularity
     const buckets = new Map<string, { positive: number; negative: number; label: string }>();
     for (const point of filtered) {
-      const date = new Date(point.timestamp);
-      let key: string;
+      const bucketStart = Math.floor(point.timestamp / bucketSpanMs) * bucketSpanMs;
+      const key = String(bucketStart);
+      const date = new Date(bucketStart);
       let label: string;
-
       if (reviewTimeframe === 'day') {
-        // Hourly buckets for day view (only for recent daily data)
-        const h = date.getHours();
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-H${h}`;
-        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(h).padStart(2, '0')}:00`;
+        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
       } else if (reviewTimeframe === 'week') {
-        // Daily buckets for week view
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         label = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       } else if (reviewTimeframe === 'month') {
-        // Monthly buckets
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        label = date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+        label = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       } else if (reviewTimeframe === 'year') {
-        // Yearly buckets
-        key = String(date.getFullYear());
-        label = String(date.getFullYear());
-      } else {
-        // All time - show by month for long history
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         label = date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+      } else {
+        label = String(date.getFullYear());
       }
 
       const bucket = buckets.get(key) || { positive: 0, negative: 0, label };
@@ -239,7 +240,7 @@ export const GameDetailModal = ({
         positive: bucket.positive,
         negative: bucket.negative,
       }));
-  }, [game.reviewHistory, reviewTimeframe]);
+  }, [game.reviewHistory, game.monthlyHistory, game.dailyHistory, reviewTimeframe]);
 
   const handleCopyAppId = () => {
     navigator.clipboard.writeText(game.id.toString());
