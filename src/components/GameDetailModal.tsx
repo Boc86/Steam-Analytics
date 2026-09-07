@@ -131,7 +131,7 @@ export const GameDetailModal = ({
     const buckets = new Map<string, { positive: number; negative: number; timestamp: number }>();
     for (const point of filtered) {
       const date = new Date(point.timestamp);
-      const key = chartTimeframe === 'day' || chartTimeframe === 'week'
+      const key = reviewTimeframe === 'day' || reviewTimeframe === 'week'
         ? date.toISOString().slice(0, 13)
         : date.toISOString().slice(0, 7);
       const bucket = buckets.get(key) || { positive: 0, negative: 0, timestamp: point.timestamp };
@@ -141,7 +141,7 @@ export const GameDetailModal = ({
       buckets.set(key, bucket);
     }
     return Array.from(buckets.entries()).map(([key, bucket]) => ({
-      date: chartTimeframe === 'day' || chartTimeframe === 'week'
+      date: reviewTimeframe === 'day' || reviewTimeframe === 'week'
         ? new Date(bucket.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })
         : new Date(`${key}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
       rating: Math.round((bucket.positive / Math.max(bucket.positive + bucket.negative, 1)) * 100),
