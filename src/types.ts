@@ -1,4 +1,4 @@
-export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD';
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD' | 'CHF' | 'RUB' | 'BRL' | 'INR' | 'KRW' | 'TRY' | 'MXN' | 'SEK' | 'NOK' | 'DKK' | 'PLN' | 'THB' | 'PHP' | 'HUF' | 'CZK' | 'ILS' | 'CLP' | 'PEN' | 'COP' | 'AED' | 'SAR';
 
 export type DeckStatus = 'Verified' | 'Playable' | 'Unsupported' | 'Unknown';
 
@@ -34,9 +34,10 @@ export interface SteamGame {
   peak24h: number;
   allTimePeak: number;
   allTimePeakDate: string;
-  price: number; // USD base
+  price: number; // Localized price (matches priceCurrency)
   originalPrice: number;
   discountPercent: number;
+  priceCurrency: string;
   historicalLow: number;
   historicalLowDate: string;
   positiveReviews: number;
