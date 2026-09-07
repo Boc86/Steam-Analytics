@@ -54,38 +54,50 @@ export const GameDetailModal = ({
 
   const timeframeData = useMemo(() => {
     let baseList: { label: string; players: number }[] = [];
+    const now = new Date();
+    const currentHour = now.getHours();
+
     if (chartTimeframe === 'day') {
-      baseList = game.playerHistory24h.map(p => ({ label: p.time, players: p.players }));
+      // Only show data up to current hour, not the full 24h
+      baseList = game.playerHistory24h
+        .filter(p => {
+          const hour = parseInt(p.time);
+          return hour <= currentHour;
+        })
+        .map(p => ({ label: p.time, players: p.players }));
     } else if (chartTimeframe === 'week') {
       baseList = game.playerHistory7d.map(p => ({ label: p.time, players: p.players }));
     } else if (chartTimeframe === 'month') {
-      const monthLabels = Array.from({ length: 4 }, (_, index) => {
-        const date = new Date();
-        date.setMonth(date.getMonth() - (3 - index));
-        return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+      // Show current month's weeks
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const weeksInMonth = Math.ceil(new Date(year, month + 1, 0).getDate() / 7);
+      baseList = Array.from({ length: weeksInMonth }, (_, i) => {
+        const weekStart = new Date(year, month, i * 7 + 1);
+        const weekEnd = new Date(year, month, Math.min((i + 1) * 7, new Date(year, month + 1, 0).getDate()));
+        return {
+          label: `${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}–${weekEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
+          players: Math.round(game.currentPlayers * (0.85 + i * 0.03))
+        };
       });
-      baseList = [
-        { label: monthLabels[0], players: Math.round(game.currentPlayers * 0.88) },
-        { label: monthLabels[1], players: Math.round(game.currentPlayers * 0.94) },
-        { label: monthLabels[2], players: Math.round(game.currentPlayers * 1.05) },
-        { label: monthLabels[3], players: game.currentPlayers },
-      ];
     } else if (chartTimeframe === 'year') {
-      const currentYear = new Date().getFullYear();
-      baseList = [
-        { label: `${currentYear - 3}`, players: Math.round(game.currentPlayers * 0.75) },
-        { label: `${currentYear - 2}`, players: Math.round(game.currentPlayers * 0.85) },
-        { label: `${currentYear - 1}`, players: Math.round(game.currentPlayers * 0.95) },
-        { label: `${currentYear}`, players: game.currentPlayers },
-      ];
+      // Show last 12 months
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      baseList = Array.from({ length: 12 }, (_, i) => {
+        const monthIndex = (currentMonth - 11 + i) % 12;
+        const year = currentYear - Math.floor((11 - i) / 12);
+        const label = new Date(year, monthIndex).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+        const ratio = 0.65 + (i / 11) * 0.35;
+        return { label, players: Math.round(game.currentPlayers * ratio) };
+      });
     } else {
-      const releaseYear = game.releaseDate.match(/\b(\d{4})\b/)?.[1] || 'Release';
-      const currentYear = new Date().getFullYear();
+      // All time - show release year to now
+      const releaseYear = parseInt(game.releaseDate.match(/\b(\d{4})\b/)?.[1] || '2020');
+      const currentYear = now.getFullYear();
       baseList = [
-        { label: releaseYear, players: game.allTimePeak },
-        { label: `${Math.min(currentYear, Number(releaseYear) + 1)}`, players: Math.round(game.allTimePeak * 0.65) },
-        { label: `${Math.min(currentYear, Number(releaseYear) + 2)}`, players: Math.round(game.allTimePeak * 0.45) },
-        { label: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }), players: game.currentPlayers },
+        { label: String(releaseYear), players: game.allTimePeak },
+        { label: String(currentYear), players: game.currentPlayers },
       ];
     }
 
