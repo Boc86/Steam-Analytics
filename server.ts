@@ -51,7 +51,7 @@ async function fetchSteamReviewData(appId: number): Promise<{
     const maxPages = 10;
 
     for (let page = 0; page < maxPages; page++) {
-      let url = `https://store.steampowered.com/appreviews/${appId}?json=1&language=all&purchase_type=all&filter=recent&num_per_page=100`;
+      let url = `https://store.steampowered.com/appreviews/${appId}?json=1&language=all&purchase_type=all&filter=all&num_per_page=100`;
       if (cursor) url += `&cursor=${cursor}`;
 
       const response = await fetch(url);
