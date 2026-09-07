@@ -32,19 +32,53 @@ async function fetchSteamReviewData(appId: number): Promise<{
   negative: number;
   rating: number;
   status: string;
+  reviewHistory: { date: string; positive: number; negative: number; rating: number }[];
 }> {
   try {
-    const response = await fetch(`https://store.steampowered.com/appreviews/${appId}?json=1&language=all&purchase_type=all`);
-    const summary = response.ok ? (await response.json()).query_summary : null;
+    const response = await fetch(`https://store.steampowered.com/appreviews/${appId}?json=1&language=all&purchase_type=all&filter=recent&num_per_page=100`);
+    const reviewData = response.ok ? await response.json() : null;
+    const summary = reviewData?.query_summary;
     const positive = Number(summary?.total_positive || 0);
     const negative = Number(summary?.total_negative || 0);
     const total = positive + negative;
     const rating = total > 0 ? Math.round((positive / total) * 100) : 0;
     const status = rating >= 95 ? 'Overwhelmingly Positive' : rating >= 80 ? 'Very Positive' : rating >= 70 ? 'Positive' : rating >= 40 ? 'Mostly Positive' : 'Mixed';
-    return { positive, negative, rating, status };
+    const buckets = new Map<string, { positive: number; negative: number }>();
+    for (const review of reviewData?.reviews || []) {
+      const date = new Date(Number(review.timestamp_created) * 1000);
+      if (Number.isNaN(date.getTime())) continue;
+      const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+      const bucket = buckets.get(key) || { positive: 0, negative: 0 };
+      if (review.voted_up) bucket.positive += 1;
+      else bucket.negative += 1;
+      buckets.set(key, bucket);
+    }
+    const reviewHistory = Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([date, bucket]) => ({
+      date,
+      positive: bucket.positive,
+      negative: bucket.negative,
+      rating: Math.round((bucket.positive / Math.max(bucket.positive + bucket.negative, 1)) * 100),
+    }));
+    return { positive, negative, rating, status, reviewHistory };
   } catch {
-    return { positive: 0, negative: 0, rating: 0, status: 'Mixed' };
+    return { positive: 0, negative: 0, rating: 0, status: 'Mixed', reviewHistory: [] };
   }
+}
+
+function parseMinimumRequirements(requirements: string | undefined) {
+  if (!requirements) return undefined;
+  const clean = (value: string) => value.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+  const getField = (label: string) => {
+    const match = requirements.match(new RegExp(`<strong>\\s*${label}:?\\s*<\\/strong>([\\s\\S]*?)(?=<strong>|<\\/li|$)`, 'i'));
+    return match ? clean(match[1]) : 'Not specified';
+  };
+  return {
+    os: getField('OS'),
+    processor: getField('Processor'),
+    memory: getField('Memory'),
+    graphics: getField('Graphics'),
+    storage: getField('Storage'),
+  };
 }
 
 async function fetchProtonDbData(appId: number) {
@@ -259,6 +293,7 @@ app.get('/api/steam/dashboard', async (_req, res) => {
           tags: [...new Set([...genres, ...categories])].slice(0, 10),
           deckStatus: d.platforms?.linux ? 'Verified' : 'Unknown',
           protonDB,
+          reviewHistory: reviews.reviewHistory,
           playerHistory24h: steamCharts.playerHistory24h,
           playerHistory7d: steamCharts.playerHistory7d,
           priceHistory: [],
@@ -266,13 +301,7 @@ app.get('/api/steam/dashboard', async (_req, res) => {
           depotsCount: 0,
           dlcCount: d.dlc?.length || 0,
           shortDescription: (d.short_description || '').replace(/<[^>]+>/g, ' ').trim(),
-          minSpecs: d.pc_requirements?.minimum ? {
-            os: d.pc_requirements.minimum,
-            processor: 'See Steam minimum requirements',
-            memory: 'See Steam minimum requirements',
-            graphics: 'See Steam minimum requirements',
-            storage: 'See Steam minimum requirements',
-          } : undefined,
+          minSpecs: parseMinimumRequirements(d.pc_requirements?.minimum),
         };
       } catch {
         return null;
@@ -488,6 +517,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       tags,
       deckStatus,
       protonDB,
+      reviewHistory: reviews.reviewHistory,
       playerHistory24h: steamCharts.playerHistory24h,
       playerHistory7d: steamCharts.playerHistory7d,
       priceHistory: [
@@ -497,7 +527,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       depotsCount: 0,
       dlcCount: d.dlc?.length || 0,
       shortDescription: cleanDescription || 'Available on Steam.',
-      minSpecs: d.pc_requirements?.minimum ? { os: d.pc_requirements.minimum, processor: 'See Steam minimum requirements', memory: 'See Steam minimum requirements', graphics: 'See Steam minimum requirements', storage: 'See Steam minimum requirements' } : undefined
+      minSpecs: parseMinimumRequirements(d.pc_requirements?.minimum)
     };
 
     setCache(cacheKey, fullGame, 300 * 1000); // 5 min cache

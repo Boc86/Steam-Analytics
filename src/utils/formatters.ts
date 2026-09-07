@@ -128,31 +128,3 @@ export function getDeckStatusBadge(status: DeckStatus): { label: string; icon: s
   }
 }
 
-export function getVGCScoreColor(score: number): { bg: string; text: string; border: string } {
-  if (score >= 80) {
-    return {
-      bg: 'bg-emerald-950/80',
-      text: 'text-emerald-400',
-      border: 'border-emerald-500/40',
-    };
-  }
-  if (score >= 60) {
-    return {
-      bg: 'bg-blue-950/80',
-      text: 'text-blue-400',
-      border: 'border-blue-500/40',
-    };
-  }
-  if (score >= 40) {
-    return {
-      bg: 'bg-amber-950/80',
-      text: 'text-amber-400',
-      border: 'border-amber-500/40',
-    };
-  }
-  return {
-    bg: 'bg-red-950/80',
-    text: 'text-red-400',
-    border: 'border-red-500/40',
-  };
-}

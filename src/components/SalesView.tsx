@@ -232,18 +232,11 @@ export const SalesView = ({
                     </span>
                   </div>
 
-                  {/* Badges: ProtonDB & VGC */}
+                  {/* Badges: ProtonDB & Steam review sentiment */}
                   <div className="flex items-center gap-2 flex-wrap mb-4 text-xs">
                     <span className={`px-2.5 py-0.5 rounded-full border font-mono font-bold text-[11px] ${protonColor.bg} ${protonColor.text} ${protonColor.border}`}>
                       Proton: {game.protonDB.tier}
                     </span>
-
-                    {typeof game.videoGameCritic?.score === 'number' && (
-                      <span className="px-2.5 py-0.5 rounded-full border border-amber-500/40 bg-amber-950/80 text-amber-400 font-bold text-[11px] flex items-center gap-1">
-                        <span>VGC:</span>
-                        <strong className="font-mono">{game.videoGameCritic.score}/100</strong>
-                      </span>
-                    )}
 
                     <span className="text-[11px] text-slate-400 font-mono">
                       ⭐ {game.steamRating}%

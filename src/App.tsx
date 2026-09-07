@@ -4,7 +4,6 @@ import { Header } from './components/Header';
 import { ChartsView } from './components/ChartsView';
 import { SalesView } from './components/SalesView';
 import { ProtonDBHub } from './components/ProtonDBHub';
-import { VideoGameCriticView } from './components/VideoGameCriticView';
 import { ReleasesView } from './components/ReleasesView';
 import { GameDetailModal } from './components/GameDetailModal';
 import { Footer } from './components/Footer';
@@ -123,12 +122,6 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'vgc' && (
-          <VideoGameCriticView
-            games={games}
-            onSelectGame={(game) => setSelectedGame(game)}
-          />
-        )}
 
         {activeTab === 'releases' && (
           <ReleasesView onSelectGame={(game) => setSelectedGame(game)} />

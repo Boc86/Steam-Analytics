@@ -1,4 +1,4 @@
-import { ExternalLink, Terminal, Gamepad2, ShieldAlert, Heart, Layers } from 'lucide-react';
+import { ExternalLink, Terminal, ShieldAlert } from 'lucide-react';
 
 export const Footer = () => {
   return (
@@ -38,25 +38,6 @@ export const Footer = () => {
             </p>
           </div>
 
-          {/* The Video Games Critic Acknowledgment & Link */}
-          <div className="space-y-3 bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
-            <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
-              <Gamepad2 className="w-4 h-4" />
-              <span>The Video Games Critic Acknowledgment</span>
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              The one source of truth for gamers. Living, patch-aware game scores, and a scoreboard for the reviewers themselves. Every number here updates as games do, and every computation is fully transparent.{' '}
-              <a
-                href="https://videogamescritic.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-amber-400 font-semibold underline underline-offset-4 hover:text-amber-300 inline-flex items-center gap-1"
-              >
-                The Video Games Critic (videogamescritic.com)
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </p>
-          </div>
         </div>
 
         {/* Legal Disclaimer & Tech Stack */}
@@ -71,10 +52,6 @@ export const Footer = () => {
           <div className="flex items-center gap-4 flex-shrink-0 font-medium">
             <a href="https://www.protondb.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">
               ProtonDB.com
-            </a>
-            <span>•</span>
-            <a href="https://videogamescritic.com" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">
-              VideoGamesCritic.com
             </a>
             <span>•</span>
             <a href="https://steamdb.info" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">

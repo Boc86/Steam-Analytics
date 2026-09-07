@@ -26,16 +26,6 @@ export interface ProtonDBData {
   url: string;
 }
 
-export interface VideoGameCriticData {
-  score?: number;
-  scoreScale?: 'vgc-100';
-  confidence?: string;
-  trend?: string;
-  platform?: string;
-  observedAt?: string;
-  url: string;
-}
-
 export interface SteamGame {
   id: number; // AppID
   name: string;
@@ -60,7 +50,7 @@ export interface SteamGame {
   tags: string[];
   deckStatus: DeckStatus;
   protonDB: ProtonDBData;
-  videoGameCritic?: VideoGameCriticData;
+  reviewHistory: { date: string; positive: number; negative: number; rating: number }[];
   playerHistory24h: PlayerHistoryPoint[];
   playerHistory7d: PlayerHistoryPoint[];
   priceHistory: PriceHistoryPoint[];
@@ -77,7 +67,7 @@ export interface SteamGame {
   };
 }
 
-export type ActiveTab = 'charts' | 'sales' | 'proton' | 'vgc' | 'releases';
+export type ActiveTab = 'charts' | 'sales' | 'proton' | 'releases';
 
 export type ConcurrentTimeframe = 'day' | 'week' | 'month' | 'year' | 'all_time';
 

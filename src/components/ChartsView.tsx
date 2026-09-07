@@ -427,42 +427,6 @@ export const ChartsView = ({
           </div>
         )}
 
-        {/* Bento Tile 4: Critic Score (VGC) */}
-        {topGame && (
-          <div className="col-span-1 bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
-            <div className="flex justify-between items-start">
-              <div className="text-slate-400 text-xs font-bold uppercase tracking-widest">Critic Score</div>
-              <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">VGC</div>
-            </div>
-
-            <div className="flex flex-col items-center my-2">
-              <div className="text-4xl sm:text-5xl font-black text-blue-500 font-mono">
-                {typeof topGame.videoGameCritic?.score === 'number' ? topGame.videoGameCritic.score : '--'}
-              </div>
-              <div className="text-slate-400 text-xs mt-2 font-medium">
-                {topGame.videoGameCritic ? 'VGC score' : 'Not imported'}
-              </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                {topGame.videoGameCritic?.platform || 'Authorized source required'}
-              </div>
-            </div>
-
-            {topGame.videoGameCritic ? (
-              <a 
-                href={topGame.videoGameCritic.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-blue-400 text-[10px] uppercase font-bold text-center hover:underline flex items-center justify-center gap-1"
-              >
-                <span>Source: VideoGameCritic</span>
-                <ExternalLink className="w-2.5 h-2.5" />
-              </a>
-            ) : (
-              <span className="text-slate-600 text-[10px] uppercase font-bold text-center">Community Verified</span>
-            )}
-          </div>
-        )}
 
         {/* Bento Tile 5: Linux / Steam Deck Compatibility Stats */}
         <div className="col-span-1 lg:col-span-3 bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
@@ -613,12 +577,6 @@ export const ChartsView = ({
                     <span>ProtonDB</span>
                   </div>
                 </th>
-                {/* The Video Game Critic Column */}
-                <th className="py-3 px-3 text-center">
-                  <div className="flex items-center justify-center gap-1 text-amber-400" title="The Video Games Critic Letter Grade">
-                    <span>VGC Grade</span>
-                  </div>
-                </th>
                 <th className="py-3 px-3 text-right">
                   <button 
                     onClick={() => handleSort('price')}
@@ -634,7 +592,7 @@ export const ChartsView = ({
             <tbody className="divide-y divide-slate-800/60 font-sans">
               {processedGames.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-500">
+                  <td colSpan={9} className="py-12 text-center text-slate-500">
                     No games match the specified filters. Try resetting search or tier options.
                   </td>
                 </tr>
@@ -729,24 +687,6 @@ export const ChartsView = ({
                           <span>{game.protonDB.tier}</span>
                           <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                         </a>
-                      </td>
-
-                      {/* The Video Game Critic Letter Grade */}
-                      <td className="py-3 px-3 text-center">
-                        {game.videoGameCritic ? (
-                          <a
-                            href={game.videoGameCritic.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center justify-center min-w-7 h-7 px-1 rounded-full font-black text-xs border border-amber-500/40 text-amber-400 bg-amber-950/80 transition-all hover:scale-110 shadow-sm"
-                            title={`VideoGameCritic score: ${game.videoGameCritic.score ?? 'unavailable'}/100`}
-                          >
-                            {typeof game.videoGameCritic.score === 'number' ? game.videoGameCritic.score : '?'}
-                          </a>
-                        ) : (
-                          <span className="text-slate-600 font-mono text-xs">-</span>
-                        )}
                       </td>
 
                       {/* Price & Discount */}

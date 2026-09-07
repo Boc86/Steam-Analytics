@@ -4,7 +4,6 @@ import {
   Flame, 
   Tag, 
   Terminal, 
-  Gamepad2, 
   Calendar, 
   ExternalLink, 
   Activity, 
@@ -204,19 +203,6 @@ export const Header = ({
             >
               <Terminal className="w-3 h-3 text-blue-400" />
               <span className="text-[11px] font-semibold uppercase tracking-wider">ProtonDB</span>
-              <ExternalLink className="w-2.5 h-2.5 opacity-60" />
-            </a>
-
-            {/* VideoGameCritic quick indicator */}
-            <a 
-              href="https://videogamescritic.com/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-slate-300 hover:text-amber-400 hover:border-amber-500/40 transition-colors"
-              title="Living, patch-aware scores and reviewer scoreboards by VideoGameCritic"
-            >
-              <Gamepad2 className="w-3 h-3 text-amber-400" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider">VideoGameCritic</span>
               <ExternalLink className="w-2.5 h-2.5 opacity-60" />
             </a>
 
@@ -474,20 +460,6 @@ export const Header = ({
           <Terminal className="w-3.5 h-3.5 text-purple-400" />
           <span>ProtonDB</span>
           <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">DECK</span>
-        </button>
-
-        <button
-          id="tab-vgc"
-          onClick={() => setActiveTab('vgc')}
-          className={`flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
-            activeTab === 'vgc'
-              ? 'text-white border-blue-500'
-              : 'text-slate-400 border-transparent hover:text-slate-200'
-          }`}
-        >
-          <Gamepad2 className="w-3.5 h-3.5 text-amber-400" />
-          <span>Video Game Critic</span>
-          <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">REVIEWS</span>
         </button>
 
         <button
