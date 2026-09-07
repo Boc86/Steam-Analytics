@@ -128,26 +128,53 @@ export const GameDetailModal = ({
       all_time: Number.POSITIVE_INFINITY,
     };
     const filtered = observations.filter((point) => reviewTimeframe === 'all_time' || point.timestamp >= now - ranges[reviewTimeframe]);
-    const buckets = new Map<string, { positive: number; negative: number; timestamp: number }>();
+
+    // Group by appropriate granularity
+    const buckets = new Map<string, { positive: number; negative: number; label: string }>();
     for (const point of filtered) {
       const date = new Date(point.timestamp);
-      const key = reviewTimeframe === 'day' || reviewTimeframe === 'week'
-        ? date.toISOString().slice(0, 13)
-        : date.toISOString().slice(0, 7);
-      const bucket = buckets.get(key) || { positive: 0, negative: 0, timestamp: point.timestamp };
+      let key: string;
+      let label: string;
+
+      if (reviewTimeframe === 'day') {
+        // Hourly buckets for day view
+        const h = date.getHours();
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-H${h}`;
+        label = date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' });
+      } else if (reviewTimeframe === 'week') {
+        // Daily buckets for week view
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        label = date.toLocaleString(undefined, { month: 'short', day: 'numeric' });
+      } else if (reviewTimeframe === 'month') {
+        // Weekly buckets for month view
+        const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
+        const weekNum = Math.floor(dayOfYear / 7);
+        key = `${date.getFullYear()}-W${weekNum}`;
+        label = `Week ${weekNum + 1}`;
+      } else if (reviewTimeframe === 'year') {
+        // Monthly buckets for year view
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        label = date.toLocaleString(undefined, { month: 'short', year: 'numeric' });
+      } else {
+        // Yearly buckets for all-time view
+        key = String(date.getFullYear());
+        label = String(date.getFullYear());
+      }
+
+      const bucket = buckets.get(key) || { positive: 0, negative: 0, label };
       bucket.positive += point.positive;
       bucket.negative += point.negative;
-      bucket.timestamp = point.timestamp;
       buckets.set(key, bucket);
     }
-    return Array.from(buckets.entries()).map(([key, bucket]) => ({
-      date: reviewTimeframe === 'day' || reviewTimeframe === 'week'
-        ? new Date(bucket.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })
-        : new Date(`${key}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
-      rating: Math.round((bucket.positive / Math.max(bucket.positive + bucket.negative, 1)) * 100),
-      positive: bucket.positive,
-      negative: bucket.negative,
-    }));
+
+    return Array.from(buckets.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, bucket]) => ({
+        date: bucket.label,
+        rating: Math.round((bucket.positive / Math.max(bucket.positive + bucket.negative, 1)) * 100),
+        positive: bucket.positive,
+        negative: bucket.negative,
+      }));
   }, [game.reviewHistory, reviewTimeframe]);
 
   const handleCopyAppId = () => {
