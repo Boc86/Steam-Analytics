@@ -806,30 +806,15 @@ app.get('/api/steam/concurrent-activity', async (req, res) => {
 });
 
 // 4. List of currencies available on Steam (fetched live from Steam)
-const steamCurrenciesCache: { data: string[]; expiry: number } | null = null;
 app.get('/api/steam/currencies', async (_req, res) => {
   const cacheKey = 'steam_currencies';
   const cached = getCached<string[]>(cacheKey);
   if (cached) {
     return res.json({ success: true, currencies: cached });
   }
-  try {
-    // Fetch from a known Steam store page to discover supported currencies
-    const resp = await fetch('https://store.steampowered.com/store/browse/?snr=1_8_9__265', {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-    if (resp.ok) {
-      const html = await resp.text();
-      // Extract currency codes from the page
-      const currencyMatches = html.matchAll(/"cc":\s*"([A-Z]{2})"/g);
-      const currencies = [...new Set([...currencyMatches].map(m => m[1]))].sort();
-      setCache(cacheKey, currencies, 60 * 60 * 1000); // 1 hour
-      return res.json({ success: true, currencies });
-    }
-  } catch {}
-  // Fallback: well-known Steam currency codes
+  // Fallback: well-known Steam currency codes (Steam doesn't expose a public list)
   const fallback = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'RUB', 'BRL', 'INR', 'KRW', 'TRY', 'MXN', 'SEK', 'NOK', 'DKK', 'PLN', 'THB', 'PHP', 'HUF', 'CZK', 'ILS', 'CLP', 'PEN', 'COP', 'AED', 'SAR'];
-  setCache(cacheKey, fallback, 60 * 60 * 1000);
+  setCache(cacheKey, fallback, 60 * 60 * 1000); // 1 hour
   return res.json({ success: true, currencies: fallback });
 });
 
