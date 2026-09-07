@@ -45,58 +45,66 @@ async function fetchSteamReviewData(appId: number): Promise<{
   reviewHistory: { date: string; positive: number; negative: number; rating: number }[];
 }> {
   try {
-    // Fetch up to 1000 reviews (10 pages) for better historical data
-    const allReviews: any[] = [];
-    let cursor: string | null = null;
-    const maxPages = 10;
+    // Use Steam's appreviewhistogram endpoint for historical data (months/years)
+    const histogramUrl = `https://store.steampowered.com/appreviewhistogram/${appId}?l=english`;
+    const histogramRes = await fetch(histogramUrl);
+    let reviewHistory: { date: string; positive: number; negative: number; rating: number }[] = [];
+    let totalPositive = 0;
+    let totalNegative = 0;
 
-    for (let page = 0; page < maxPages; page++) {
-      let url = `https://store.steampowered.com/appreviews/${appId}?json=1&language=all&purchase_type=all&filter=all&num_per_page=100`;
-      if (cursor) url += `&cursor=${cursor}`;
+    if (histogramRes.ok) {
+      const histogramData = await histogramRes.json();
+      const results = histogramData?.results || {};
 
-      const response = await fetch(url);
-      if (!response.ok) break;
+      // Process rollups (long-term monthly/weekly data)
+      const rollups = results.rollups || [];
+      for (const r of rollups) {
+        const dateVal = r.date;
+        const date = new Date(dateVal > 1e12 ? dateVal / 1000 : dateVal * 1000);
+        const isoDate = date.toISOString().slice(0, 10);
+        const up = r.recommendations_up || 0;
+        const down = r.recommendations_down || 0;
+        totalPositive += up;
+        totalNegative += down;
+        reviewHistory.push({
+          date: `${isoDate}T00:00:00Z`,
+          positive: up,
+          negative: down,
+          rating: Math.round((up / Math.max(up + down, 1)) * 100),
+        });
+      }
 
-      const reviewData = await response.json();
-      const reviews = reviewData?.reviews || [];
-      allReviews.push(...reviews);
-      cursor = reviewData?.cursor || null;
-
-      if (!cursor || reviews.length === 0) break;
+      // Process recent daily data (last 30 days)
+      const recent = results.recent || [];
+      const existingDates = new Set(reviewHistory.map(r => r.date.slice(0, 10)));
+      for (const r of recent) {
+        const dateVal = r.date;
+        const date = new Date(dateVal > 1e12 ? dateVal / 1000 : dateVal * 1000);
+        const isoDate = date.toISOString().slice(0, 10);
+        if (!existingDates.has(isoDate)) {
+          const up = r.recommendations_up || 0;
+          const down = r.recommendations_down || 0;
+          totalPositive += up;
+          totalNegative += down;
+          reviewHistory.push({
+            date: `${isoDate}T00:00:00Z`,
+            positive: up,
+            negative: down,
+            rating: Math.round((up / Math.max(up + down, 1)) * 100),
+          });
+        }
+      }
     }
 
-    const summary = allReviews.length > 0 ? {
-      total_positive: allReviews.filter(r => r.voted_up).length,
-      total_negative: allReviews.filter(r => !r.voted_up).length,
-    } : { total_positive: 0, total_negative: 0 };
+    // Sort by date
+    reviewHistory.sort((a, b) => a.date.localeCompare(b.date));
 
-    const positive = summary.total_positive;
-    const negative = summary.total_negative;
+    // Calculate overall rating from summary if available
+    const positive = totalPositive;
+    const negative = totalNegative;
     const total = positive + negative;
     const rating = total > 0 ? Math.round((positive / total) * 100) : 0;
     const status = rating >= 95 ? 'Overwhelmingly Positive' : rating >= 80 ? 'Very Positive' : rating >= 70 ? 'Positive' : rating >= 40 ? 'Mostly Positive' : 'Mixed';
-
-    // Bucket by day
-    const buckets = new Map<string, { positive: number; negative: number }>();
-    for (const review of allReviews) {
-      const ts = Number(review.timestamp_created);
-      if (isNaN(ts)) continue;
-      const date = new Date(ts * 1000);
-      const key = date.toISOString().slice(0, 10); // YYYY-MM-DD
-      const bucket = buckets.get(key) || { positive: 0, negative: 0 };
-      if (review.voted_up) bucket.positive += 1;
-      else bucket.negative += 1;
-      buckets.set(key, bucket);
-    }
-
-    const reviewHistory = Array.from(buckets.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, bucket]) => ({
-        date: `${date}T00:00:00Z`,
-        positive: bucket.positive,
-        negative: bucket.negative,
-        rating: Math.round((bucket.positive / Math.max(bucket.positive + bucket.negative, 1)) * 100),
-      }));
 
     return { positive, negative, rating, status, reviewHistory };
   } catch {

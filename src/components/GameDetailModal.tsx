@@ -45,33 +45,31 @@ export const GameDetailModal = ({
   currency,
 }: GameDetailModalProps) => {
   const [chartTimeframe, setChartTimeframe] = useState<ConcurrentTimeframe>('day');
-  const [reviewTimeframe, setReviewTimeframe] = useState<ConcurrentTimeframe>('day');
+  const [reviewTimeframe, setReviewTimeframe] = useState<ConcurrentTimeframe>('month');
   const [copiedAppId, setCopiedAppId] = useState(false);
   const [copiedLaunch, setCopiedLaunch] = useState(false);
 
   // Determine available review filters based on data range
   const reviewFilterOptions = useMemo(() => {
-    if (!game.reviewHistory?.length) return ['day'];
+    if (!game.reviewHistory?.length) return ['month'];
 
     const dates = game.reviewHistory
       .map(r => new Date(r.date).getTime())
       .filter(t => Number.isFinite(t));
 
-    if (!dates.length) return ['day'];
+    if (!dates.length) return ['month'];
 
     const oldest = Math.min(...dates);
     const newest = Math.max(...dates);
     const daysRange = (newest - oldest) / (1000 * 60 * 60 * 24);
+    const monthsRange = daysRange / 30;
 
-    const options: ConcurrentTimeframe[] = ['day', 'week'];
-    if (daysRange >= 7) options.push('month');
-    if (daysRange >= 30) options.push('year');
-    options.push('all_time');
+    const options: ConcurrentTimeframe[] = ['month', 'year'];
+    if (monthsRange >= 12) options.push('all_time');
 
     // Auto-select best default filter
-    if (daysRange < 1) return ['day'];
-    if (daysRange < 7) return ['day', 'week'];
-    if (daysRange < 30) return ['day', 'week', 'month'];
+    if (monthsRange < 1) return ['month'];
+    if (monthsRange < 12) return ['month', 'year'];
     return options;
   }, [game.reviewHistory]);
 
@@ -175,40 +173,25 @@ export const GameDetailModal = ({
     };
     const filtered = observations.filter((point) => reviewTimeframe === 'all_time' || point.timestamp >= nowTimestamp - ranges[reviewTimeframe]);
 
-    // Group by appropriate granularity (matching player chart)
+    // Group by appropriate granularity
     const buckets = new Map<string, { positive: number; negative: number; label: string }>();
     for (const point of filtered) {
       const date = new Date(point.timestamp);
       let key: string;
       let label: string;
 
-      if (reviewTimeframe === 'day') {
-        // Hourly buckets for day view
-        const h = date.getHours();
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-H${h}`;
-        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(h).padStart(2, '0')}:00`;
-      } else if (reviewTimeframe === 'week') {
-        // Daily buckets for week view
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
-      } else if (reviewTimeframe === 'month') {
-        // Weekly buckets for current month
-        const year = date.getFullYear();
-        const month = date.getMonth();
-        const dayOfYear = Math.floor((date.getTime() - new Date(year, 0, 0).getTime()) / 86400000);
-        const weekNum = Math.floor(dayOfYear / 7);
-        const weekStart = new Date(year, month, weekNum * 7 + 1);
-        const weekEnd = new Date(year, month, Math.min((weekNum + 1) * 7, new Date(year, month + 1, 0).getDate()));
-        key = `${year}-W${weekNum}`;
-        label = `${String(weekStart.getMonth() + 1).padStart(2, '0')}/${String(weekStart.getDate()).padStart(2, '0')}-${String(weekEnd.getMonth() + 1).padStart(2, '0')}/${String(weekEnd.getDate()).padStart(2, '0')}`;
-      } else if (reviewTimeframe === 'year') {
-        // Monthly buckets for last 12 months
+      if (reviewTimeframe === 'month') {
+        // Monthly buckets
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`;
-      } else {
-        // Yearly buckets for all-time view
+        label = date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+      } else if (reviewTimeframe === 'year') {
+        // Yearly buckets
         key = String(date.getFullYear());
         label = String(date.getFullYear());
+      } else {
+        // Default to monthly
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        label = date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
       }
 
       const bucket = buckets.get(key) || { positive: 0, negative: 0, label };
