@@ -228,11 +228,11 @@ export const Header = ({
       </div>
 
       {/* Main Bar: Logo, Bento Pill Search, Live Feed Status */}
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
         {/* Brand Logo & Name */}
         <div 
           onClick={() => setActiveTab('charts')}
-          className="flex items-center gap-3 cursor-pointer group flex-shrink-0"
+          className="w-full sm:w-auto flex items-center gap-3 cursor-pointer group flex-shrink-0"
         >
           <div className="w-9 h-9 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25 group-hover:scale-105 transition-transform">
             <svg viewBox="0 0 24 24" className="w-5 h-5 fill-white" xmlns="http://www.w3.org/2000/svg">
@@ -248,7 +248,7 @@ export const Header = ({
         </div>
 
         {/* Bento-styled Pill Search Bar (Live Steam Global Store Catalog) */}
-        <div ref={searchContainerRef} className="relative flex-1 max-w-lg min-w-[200px]">
+        <div ref={searchContainerRef} className="relative flex-1 min-w-0 w-auto max-w-lg">
           <div className="relative bg-slate-800/90 hover:bg-slate-800 transition-colors px-4 py-2 rounded-full flex items-center gap-2 border border-slate-700 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
             {isSearchingLive ? (
               <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
@@ -265,7 +265,7 @@ export const Header = ({
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              className="w-full bg-transparent text-xs text-slate-100 placeholder-slate-500 focus:outline-none font-sans"
+              className="w-full min-w-0 bg-transparent text-xs text-slate-100 placeholder-slate-500 focus:outline-none font-sans"
             />
             {searchQuery && (
               <button 
@@ -408,7 +408,7 @@ export const Header = ({
         </div>
 
         {/* Live Steam Status Indicator */}
-        <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3.5 py-1.5 rounded-full shadow-sm flex-shrink-0">
+        <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-2.5 sm:px-3.5 py-1.5 rounded-full shadow-sm flex-shrink-0">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>

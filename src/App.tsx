@@ -63,12 +63,6 @@ export default function App() {
 
   // Dynamically load any game from the entire Steam store by AppID
   const handleSelectGameById = async (appId: number) => {
-    const existing = games.find((g) => g.id === appId);
-    if (existing) {
-      setSelectedGame(existing);
-      return;
-    }
-
     try {
       const res = await fetch(`/api/steam/game/${appId}`);
       if (res.ok) {
@@ -78,9 +72,14 @@ export default function App() {
           setGames((prev) => [newGame, ...prev.filter((g) => g.id !== newGame.id)]);
           setSelectedGame(newGame);
         }
+      } else {
+        const existing = games.find((g) => g.id === appId);
+        if (existing) setSelectedGame(existing);
       }
     } catch (err) {
       console.warn('Failed to fetch full live Steam game details:', err);
+      const existing = games.find((g) => g.id === appId);
+      if (existing) setSelectedGame(existing);
     }
   };
 
@@ -93,7 +92,7 @@ export default function App() {
         currency={currency}
         setCurrency={setCurrency}
         games={games}
-        onSelectGame={(game) => setSelectedGame(game)}
+        onSelectGame={(game) => handleSelectGameById(game.id)}
         onSelectGameById={handleSelectGameById}
       />
 
@@ -103,7 +102,7 @@ export default function App() {
           <ChartsView
             games={games}
             currency={currency}
-            onSelectGame={(game) => setSelectedGame(game)}
+            onSelectGame={(game) => handleSelectGameById(game.id)}
           />
         )}
 
@@ -111,20 +110,20 @@ export default function App() {
           <SalesView
             games={games}
             currency={currency}
-            onSelectGame={(game) => setSelectedGame(game)}
+            onSelectGame={(game) => handleSelectGameById(game.id)}
           />
         )}
 
         {activeTab === 'proton' && (
           <ProtonDBHub
             games={games}
-            onSelectGame={(game) => setSelectedGame(game)}
+            onSelectGame={(game) => handleSelectGameById(game.id)}
           />
         )}
 
 
         {activeTab === 'releases' && (
-          <ReleasesView onSelectGame={(game) => setSelectedGame(game)} />
+          <ReleasesView onSelectGame={(game) => handleSelectGameById(game.id)} />
         )}
       </main>
 

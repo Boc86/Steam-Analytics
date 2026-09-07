@@ -656,7 +656,9 @@ export const ChartsView = ({
                       {/* All-Time Peak */}
                       <td className="py-3 px-3 text-right font-mono text-slate-400 hidden lg:table-cell">
                         <div>{formatNumber(game.allTimePeak)}</div>
-                        <div className="text-[10px] text-slate-500">{game.allTimePeakDate}</div>
+                        {game.allTimePeak > 0 && game.allTimePeakDate !== 'Unavailable' && (
+                          <div className="text-[10px] text-slate-500">{game.allTimePeakDate}</div>
+                        )}
                       </td>
 
                       {/* Rating */}
@@ -682,9 +684,9 @@ export const ChartsView = ({
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold font-mono uppercase tracking-wider border shadow-sm transition-all hover:scale-105 ${protonColor.bg} ${protonColor.text} ${protonColor.border}`}
-                          title={`ProtonDB Tier: ${game.protonDB.tier} (${game.protonDB.confidence} confidence, ${game.protonDB.totalReports} reports)`}
+                          title={`ProtonDB: ${game.protonDB.totalReports > 0 ? game.protonDB.tier : 'No report'} (${game.protonDB.totalReports} reports)`}
                         >
-                          <span>{game.protonDB.tier}</span>
+                          <span>{game.protonDB.totalReports > 0 ? game.protonDB.tier : 'No report'}</span>
                           <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                         </a>
                       </td>

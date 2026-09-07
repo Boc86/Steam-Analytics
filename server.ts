@@ -47,14 +47,14 @@ async function fetchSteamReviewData(appId: number): Promise<{
     for (const review of reviewData?.reviews || []) {
       const date = new Date(Number(review.timestamp_created) * 1000);
       if (Number.isNaN(date.getTime())) continue;
-      const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+      const key = date.toISOString().slice(0, 13);
       const bucket = buckets.get(key) || { positive: 0, negative: 0 };
       if (review.voted_up) bucket.positive += 1;
       else bucket.negative += 1;
       buckets.set(key, bucket);
     }
     const reviewHistory = Array.from(buckets.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([date, bucket]) => ({
-      date,
+      date: `${date}:00:00Z`,
       positive: bucket.positive,
       negative: bucket.negative,
       rating: Math.round((bucket.positive / Math.max(bucket.positive + bucket.negative, 1)) * 100),
@@ -138,10 +138,15 @@ async function fetchSteamChartsData(appId: number, currentPlayers: number) {
         time: `${String(index * 2).padStart(2, '0')}:00`,
         players: Math.round(currentPlayers * ratio),
       }));
-      result.playerHistory7d = [0.92, 0.94, 0.96, 0.98, 1.08, 1.2, 1.15].map((ratio, index) => ({
-        time: `Day ${index + 1}`,
+      const today = new Date();
+      result.playerHistory7d = [0.92, 0.94, 0.96, 0.98, 1.08, 1.2, 1.15].map((ratio, index) => {
+        const date = new Date(today);
+        date.setUTCDate(today.getUTCDate() - (6 - index));
+        return {
+        time: date.toISOString().slice(0, 10),
         players: Math.round(currentPlayers * ratio),
-      }));
+        };
+      });
     }
   } catch {}
   return result;

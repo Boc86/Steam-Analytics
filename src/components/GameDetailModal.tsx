@@ -111,6 +111,44 @@ export const GameDetailModal = ({
     return { data: dataWithTrend, peak, avg };
   }, [game, chartTimeframe]);
 
+  const reviewTrendData = useMemo(() => {
+    const observations = game.reviewHistory
+      .map((point) => ({ ...point, timestamp: new Date(point.date).getTime() }))
+      .filter((point) => Number.isFinite(point.timestamp))
+      .sort((a, b) => a.timestamp - b.timestamp);
+    if (!observations.length) return [];
+
+    const now = Date.now();
+    const ranges: Record<ConcurrentTimeframe, number> = {
+      day: 24 * 60 * 60 * 1000,
+      week: 7 * 24 * 60 * 60 * 1000,
+      month: 30 * 24 * 60 * 60 * 1000,
+      year: 365 * 24 * 60 * 60 * 1000,
+      all_time: Number.POSITIVE_INFINITY,
+    };
+    const filtered = observations.filter((point) => chartTimeframe === 'all_time' || point.timestamp >= now - ranges[chartTimeframe]);
+    const buckets = new Map<string, { positive: number; negative: number; timestamp: number }>();
+    for (const point of filtered) {
+      const date = new Date(point.timestamp);
+      const key = chartTimeframe === 'day' || chartTimeframe === 'week'
+        ? date.toISOString().slice(0, 13)
+        : date.toISOString().slice(0, 7);
+      const bucket = buckets.get(key) || { positive: 0, negative: 0, timestamp: point.timestamp };
+      bucket.positive += point.positive;
+      bucket.negative += point.negative;
+      bucket.timestamp = point.timestamp;
+      buckets.set(key, bucket);
+    }
+    return Array.from(buckets.entries()).map(([key, bucket]) => ({
+      date: chartTimeframe === 'day' || chartTimeframe === 'week'
+        ? new Date(bucket.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })
+        : new Date(`${key}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
+      rating: Math.round((bucket.positive / Math.max(bucket.positive + bucket.negative, 1)) * 100),
+      positive: bucket.positive,
+      negative: bucket.negative,
+    }));
+  }, [game.reviewHistory, chartTimeframe]);
+
   const handleCopyAppId = () => {
     navigator.clipboard.writeText(game.id.toString());
     setCopiedAppId(true);
@@ -308,6 +346,7 @@ export const GameDetailModal = ({
               <div>
                 <div className="text-slate-500 uppercase text-[10px]">Historical Record</div>
                 <div className="text-amber-400 font-bold text-sm sm:text-base mt-0.5">{formatNumber(game.allTimePeak)}</div>
+                {game.allTimePeakDate !== 'Unavailable' && <div className="text-[10px] text-slate-500">{game.allTimePeakDate}</div>}
               </div>
             </div>
 
@@ -395,14 +434,14 @@ export const GameDetailModal = ({
                   <ThumbsUp className="w-3.5 h-3.5" />
                   <span>Steam Review Trend</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Monthly positive-review share from Steam's recent review feed.</p>
+                <p className="text-xs text-slate-500 mt-1">Positive-review share from Steam observations in the selected timeframe.</p>
               </div>
               <span className="text-xs text-slate-400 font-mono">{game.steamRating}% current</span>
             </div>
-            {game.reviewHistory.length > 0 ? (
+            {reviewTrendData.length > 0 ? (
               <div className="h-52 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={game.reviewHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <ComposedChart data={reviewTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} />
                     <YAxis domain={[0, 100]} stroke="#64748b" fontSize={10} tickLine={false} tickFormatter={(value) => `${value}%`} />
@@ -412,7 +451,7 @@ export const GameDetailModal = ({
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="py-8 text-center text-xs text-slate-500">Steam has not returned dated review history for this title.</div>
+              <div className="py-8 text-center text-xs text-slate-500">Steam has not returned review observations for this timeframe.</div>
             )}
           </div>
 
