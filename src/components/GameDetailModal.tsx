@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   X, 
   ExternalLink, 
@@ -45,9 +45,42 @@ export const GameDetailModal = ({
   currency,
 }: GameDetailModalProps) => {
   const [chartTimeframe, setChartTimeframe] = useState<ConcurrentTimeframe>('day');
-  const [reviewTimeframe, setReviewTimeframe] = useState<ConcurrentTimeframe>('year');
+  const [reviewTimeframe, setReviewTimeframe] = useState<ConcurrentTimeframe>('day');
   const [copiedAppId, setCopiedAppId] = useState(false);
   const [copiedLaunch, setCopiedLaunch] = useState(false);
+
+  // Determine available review filters based on data range
+  const reviewFilterOptions = useMemo(() => {
+    if (!game.reviewHistory?.length) return ['day'];
+
+    const dates = game.reviewHistory
+      .map(r => new Date(r.date).getTime())
+      .filter(t => Number.isFinite(t));
+
+    if (!dates.length) return ['day'];
+
+    const oldest = Math.min(...dates);
+    const newest = Math.max(...dates);
+    const daysRange = (newest - oldest) / (1000 * 60 * 60 * 24);
+
+    const options: ConcurrentTimeframe[] = ['day', 'week'];
+    if (daysRange >= 7) options.push('month');
+    if (daysRange >= 30) options.push('year');
+    options.push('all_time');
+
+    // Auto-select best default filter
+    if (daysRange < 1) return ['day'];
+    if (daysRange < 7) return ['day', 'week'];
+    if (daysRange < 30) return ['day', 'week', 'month'];
+    return options;
+  }, [game.reviewHistory]);
+
+  // Ensure reviewTimeframe is valid
+  useEffect(() => {
+    if (!reviewFilterOptions.includes(reviewTimeframe)) {
+      setReviewTimeframe(reviewFilterOptions[0]);
+    }
+  }, [reviewFilterOptions, reviewTimeframe]);
 
   const protonColor = getProtonTierColor(game.protonDB.tier);
   const deckBadge = getDeckStatusBadge(game.deckStatus);
@@ -487,7 +520,7 @@ export const GameDetailModal = ({
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-xs text-slate-400 font-mono">{game.steamRating}% current</span>
                 <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-2xl border border-slate-800">
-                  {(['day', 'week', 'month', 'year', 'all_time'] as ConcurrentTimeframe[]).map((tf) => (
+                  {reviewFilterOptions.map((tf) => (
                     <button
                       key={tf}
                       onClick={() => setReviewTimeframe(tf)}
