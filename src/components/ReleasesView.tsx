@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Users, Flame, ExternalLink, RefreshCw, Radio, Sparkles, Filter } from 'lucide-react';
-import { UPCOMING_RELEASES } from '../data/games';
 import { formatNumber } from '../utils/formatters';
 
 interface ReleaseItem {
@@ -23,7 +22,7 @@ interface ReleasesViewProps {
 }
 
 export const ReleasesView = ({ onSelectGame }: ReleasesViewProps) => {
-  const [releases, setReleases] = useState<ReleaseItem[]>(UPCOMING_RELEASES);
+  const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<string>('Just now');
   const [activeFilter, setActiveFilter] = useState<'all' | '2026' | '2027' | 'tba'>('all');
@@ -40,7 +39,7 @@ export const ReleasesView = ({ onSelectGame }: ReleasesViewProps) => {
         }
       }
     } catch (err) {
-      console.warn('Failed to load live releases, using verified upcoming 2026 cache:', err);
+      console.warn('Failed to load live releases:', err);
     } finally {
       setIsLoading(false);
     }

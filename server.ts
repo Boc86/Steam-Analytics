@@ -60,8 +60,7 @@ async function fetchSteamGlobalStats(): Promise<{ online: number; inGame: number
     console.warn('Failed to fetch real-time Steam global network stats:', err);
   }
 
-  // Fallback if upstream temporarily unreachable
-  return { online: 30050000, inGame: 7590000, success: false };
+  return { online: 0, inGame: 0, success: false };
 }
 
 // 0. Live Global Steam Network Stats (Online users & Playing Now)
@@ -113,6 +112,90 @@ app.get('/api/steam/player-counts', async (req, res) => {
     setCache(cacheKey, counts, 30 * 1000); // 30s cache
 
     res.json({ success: true, counts });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Dashboard titles are selected from Steam's current featured catalog, then enriched from Steam app details.
+app.get('/api/steam/dashboard', async (_req, res) => {
+  try {
+    const categoryRes = await fetch('https://store.steampowered.com/api/featuredcategories/?l=english&cc=US');
+    if (!categoryRes.ok) return res.status(502).json({ success: false, error: 'Steam catalog unavailable' });
+    const categoryData = await categoryRes.json();
+    const catalogItems = [
+      ...(categoryData.top_sellers?.items || []),
+      ...(categoryData.specials?.items || []),
+      ...(categoryData.new_releases?.items || []),
+    ];
+    const appIds = [...new Set(catalogItems.map((item: any) => Number(item.id)).filter(Boolean))].slice(0, 24);
+    const games = (await Promise.all(appIds.map(async (appId) => {
+      try {
+        const [detailRes, playerRes] = await Promise.all([
+          fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=english&cc=US`),
+          fetch(`https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appId}`),
+        ]);
+        const detailData = detailRes.ok ? await detailRes.json() : null;
+        const d = detailData?.[appId]?.data;
+        if (!d || d.type !== 'game') return null;
+        const playerData = playerRes.ok ? await playerRes.json() : null;
+        const currentPlayers = Number(playerData?.response?.player_count || 0);
+        const positiveReviews = Number(d.recommendations?.total || 0);
+        const genres = (d.genres || []).map((genre: any) => genre.description);
+        const categories = (d.categories || []).map((category: any) => category.description);
+        const price = d.price_overview ? d.price_overview.final / 100 : 0;
+        const originalPrice = d.price_overview ? d.price_overview.initial / 100 : price;
+        return {
+          id: d.steam_appid,
+          name: d.name,
+          headerImage: d.header_image,
+          currentPlayers,
+          peak24h: currentPlayers,
+          allTimePeak: 0,
+          allTimePeakDate: 'Unavailable from Steam API',
+          price,
+          originalPrice,
+          discountPercent: d.price_overview?.discount_percent || 0,
+          historicalLow: 0,
+          historicalLowDate: 'Unavailable from Steam API',
+          positiveReviews,
+          negativeReviews: 0,
+          steamRating: 0,
+          ratingStatus: 'Mixed',
+          releaseDate: d.release_date?.date || 'Release date unavailable',
+          developer: d.developers?.[0] || 'Developer unavailable',
+          publisher: d.publishers?.[0] || 'Publisher unavailable',
+          genres,
+          tags: [...new Set([...genres, ...categories])].slice(0, 10),
+          deckStatus: d.platforms?.linux ? 'Verified' : 'Unknown',
+          protonDB: {
+            tier: 'Unknown',
+            confidence: 'Unknown',
+            totalReports: 0,
+            recommendedProton: 'Unavailable',
+            tinkerSteps: 'No ProtonDB data loaded.',
+            url: `https://www.protondb.com/app/${d.steam_appid}`,
+          },
+          playerHistory24h: [],
+          playerHistory7d: [],
+          priceHistory: [],
+          achievementsCount: d.achievements?.total || 0,
+          depotsCount: 0,
+          dlcCount: d.dlc?.length || 0,
+          shortDescription: (d.short_description || '').replace(/<[^>]+>/g, ' ').trim(),
+          minSpecs: d.pc_requirements?.minimum ? {
+            os: d.pc_requirements.minimum,
+            processor: 'See Steam minimum requirements',
+            memory: 'See Steam minimum requirements',
+            graphics: 'See Steam minimum requirements',
+            storage: 'See Steam minimum requirements',
+          } : undefined,
+        };
+      } catch {
+        return null;
+      }
+    }))).filter(Boolean);
+    res.json({ success: true, games });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -260,7 +343,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
     }
 
     // Fetch live players
-    let currentPlayers = 1200;
+    let currentPlayers = 0;
     try {
       const pRes = await fetch(`https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appId}`);
       if (pRes.ok) {
@@ -272,9 +355,9 @@ app.get('/api/steam/game/:appid', async (req, res) => {
     } catch {}
 
     // Fetch ProtonDB summary
-    let protonTier = 'Gold';
-    let protonConfidence = 'Strong';
-    let protonReports = 240;
+    let protonTier = 'Unknown';
+    let protonConfidence = 'Unknown';
+    let protonReports = 0;
     try {
       const protoRes = await fetch(`https://www.protondb.com/api/v1/reports/summaries/${appId}.json`);
       if (protoRes.ok) {
@@ -291,31 +374,14 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       }
     } catch {}
 
-    const price = d.price_overview ? d.price_overview.final / 100 : (d.is_free ? 0 : 34.99);
+    const price = d.price_overview ? d.price_overview.final / 100 : 0;
     const originalPrice = d.price_overview ? d.price_overview.initial / 100 : price;
     const discountPercent = d.price_overview?.discount_percent || 0;
 
-    // Build synthetic 24h & 7d history curves around currentPlayers
-    const hours = ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', 'Now'];
-    const playerHistory24h = hours.map((time, idx) => {
-      const factor = 0.72 + Math.sin(idx / 2) * 0.32 + (idx === hours.length - 1 ? 0 : (Math.random() * 0.08 - 0.04));
-      return {
-        time,
-        players: idx === hours.length - 1 ? currentPlayers : Math.max(10, Math.round(currentPlayers * factor))
-      };
-    });
-
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const playerHistory7d = days.map((day, idx) => {
-      const factor = 0.8 + (idx >= 4 ? 0.35 : 0.1) + (Math.random() * 0.1);
-      return {
-        time: day,
-        players: Math.max(10, Math.round(currentPlayers * factor))
-      };
-    });
-
-    const peak24h = Math.max(currentPlayers, Math.round(currentPlayers * 1.35));
-    const allTimePeak = Math.max(peak24h, Math.round(currentPlayers * 2.6) + 12000);
+    const playerHistory24h: any[] = [];
+    const playerHistory7d: any[] = [];
+    const peak24h = currentPlayers;
+    const allTimePeak = 0;
 
     const genres = (d.genres || []).map((g: any) => g.description);
     const categories = (d.categories || []).map((c: any) => c.description);
@@ -323,7 +389,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
 
     const deckStatus = (d.platforms?.linux || protonTier === 'Platinum' || protonTier === 'Native') 
       ? 'Verified' 
-      : (protonTier === 'Gold' || protonTier === 'Silver' ? 'Playable' : 'Unsupported');
+      : protonTier === 'Unknown' ? 'Unknown' : (protonTier === 'Gold' || protonTier === 'Silver' ? 'Playable' : 'Unsupported');
 
     const cleanDescription = (d.short_description || '')
       .replace(/<[^>]+>/g, ' ')
@@ -342,54 +408,36 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       price,
       originalPrice,
       discountPercent,
-      historicalLow: Math.round(price * 0.8 * 100) / 100,
-      historicalLowDate: 'Store Promotion',
-      positiveReviews: d.recommendations?.total ? Math.round(d.recommendations.total * 0.82) : 14200,
-      negativeReviews: d.recommendations?.total ? Math.round(d.recommendations.total * 0.18) : 3100,
-      steamRating: d.metacritic?.score || 84,
+      historicalLow: 0,
+      historicalLowDate: 'Unavailable from Steam API',
+      positiveReviews: d.recommendations?.total || 0,
+      negativeReviews: 0,
+      steamRating: d.metacritic?.score || 0,
       ratingStatus: (d.metacritic?.score > 85 ? 'Very Positive' : (d.metacritic?.score > 70 ? 'Positive' : 'Mostly Positive')),
       releaseDate: d.release_date?.date || 'Available on Steam',
       developer: d.developers?.[0] || 'Studio Developer',
       publisher: d.publishers?.[0] || 'Publisher',
-      genres: genres.length > 0 ? genres : ['Action', 'Strategy'],
-      tags: tags.length > 0 ? tags : ['Multiplayer', 'Online', 'Tactical'],
+      genres,
+      tags,
       deckStatus,
       protonDB: {
         tier: protonTier,
         confidence: protonConfidence,
         totalReports: protonReports,
-        recommendedProton: 'Proton GE / Experimental',
-        launchOptions: 'PROTON_NO_ESYNC=1 %command%',
-        tinkerSteps: 'Runs with default Proton or Proton Experimental. Performance confirmed.',
-        deckFpsAverage: '50-60 FPS',
+        recommendedProton: 'Unavailable',
+        tinkerSteps: 'No ProtonDB data loaded.',
         url: `https://www.protondb.com/app/${d.steam_appid}`,
-      },
-      videoGameCritic: {
-        grade: (d.metacritic?.score ? (d.metacritic.score >= 90 ? 'A' : (d.metacritic.score >= 80 ? 'B+' : 'B')) : 'B+'),
-        platformReviewed: 'PC',
-        reviewDate: 'Platform Review',
-        excerpt: cleanDescription || 'Engaging tactical gameplay with detailed mechanics.',
-        pros: ['Deep mechanics', 'Atmospheric world design', 'Active community'],
-        cons: ['Hardware demanding in large engagements'],
-        url: 'https://videogamescritic.com/',
       },
       playerHistory24h,
       playerHistory7d,
       priceHistory: [
-        { date: 'Launch', price: originalPrice, discount: 0 },
-        { date: 'Recent', price, discount: discountPercent },
+        { date: 'Current', price, discount: discountPercent },
       ],
       achievementsCount: d.achievements?.total || 0,
-      depotsCount: 8,
+      depotsCount: 0,
       dlcCount: d.dlc?.length || 0,
       shortDescription: cleanDescription || 'Available on Steam.',
-      minSpecs: {
-        os: 'Windows 10 / 11 64-bit',
-        processor: 'Intel Core i5 / AMD Ryzen 5',
-        memory: '16 GB RAM',
-        graphics: 'NVIDIA GeForce GTX 1060 / AMD Radeon RX 580',
-        storage: '60 GB available space',
-      }
+      minSpecs: d.pc_requirements?.minimum ? { os: d.pc_requirements.minimum, processor: 'See Steam minimum requirements', memory: 'See Steam minimum requirements', graphics: 'See Steam minimum requirements', storage: 'See Steam minimum requirements' } : undefined
     };
 
     setCache(cacheKey, fullGame, 300 * 1000); // 5 min cache
@@ -421,11 +469,11 @@ app.get('/api/steam/releases', async (req, res) => {
           releases.push({
             id: item.id,
             name: item.name,
-            releaseDate: '2026 / Coming Soon',
-            publisher: 'Steam Partner Studios',
-            developer: 'Independent Developer',
-            followers: Math.floor(Math.random() * 80000) + 25000,
-            hypeScore: Math.floor(Math.random() * 15) + 84,
+            releaseDate: item.release_date || 'Coming soon',
+            publisher: item.publisher || 'Publisher unavailable',
+            developer: item.developer || 'Developer unavailable',
+            followers: item.followers || 0,
+            hypeScore: 0,
             tags: ['Coming Soon', 'Steam Store', 'Wishlisted'],
             headerImage: item.header_image || item.large_capsule_image || `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${item.id}/header.jpg`,
             price: item.final_price ? item.final_price / 100 : 0,
@@ -452,11 +500,11 @@ app.get('/api/steam/releases', async (req, res) => {
             releases.push({
               id: appId,
               name: item.name,
-              releaseDate: '2026 / 2027 Expected',
-              publisher: 'Steam Publisher Network',
-              developer: 'Verified Developer',
-              followers: Math.floor(Math.random() * 250000) + 120000,
-              hypeScore: Math.floor(Math.random() * 10) + 90,
+              releaseDate: 'Release date unavailable',
+              publisher: 'Publisher unavailable',
+              developer: 'Developer unavailable',
+              followers: 0,
+              hypeScore: 0,
               tags: ['Top Wishlisted', 'Anticipated', 'Next-Gen'],
               headerImage: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
               price: 0,
@@ -480,15 +528,10 @@ app.get('/api/steam/releases', async (req, res) => {
             const d = detailData[rel.id]?.data;
             if (d) {
               const liveDate = d.release_date?.date || rel.releaseDate;
-              // Ensure we show 2026/2027 or upcoming
-              const cleanedDate = liveDate.includes('2025') 
-                ? liveDate.replace('2025', '2026') 
-                : liveDate;
-
               return {
                 ...rel,
                 name: d.name || rel.name,
-                releaseDate: cleanedDate,
+                releaseDate: liveDate,
                 publisher: d.publishers?.[0] || rel.publisher,
                 developer: d.developers?.[0] || rel.developer,
                 tags: d.genres?.map((g: any) => g.description) || rel.tags,
@@ -506,65 +549,7 @@ app.get('/api/steam/releases', async (req, res) => {
     // Combine enriched and remaining
     const finalReleases = [...enriched, ...releases.slice(8)];
 
-    // Ensure we have prominent top-anticipated titles like Deadlock, Light No Fire, Fable, Silksong with 2026 dates
-    const curatedTop = [
-      {
-        id: 1422450,
-        name: 'Deadlock',
-        releaseDate: 'Late 2026 Expected',
-        publisher: 'Valve',
-        developer: 'Valve',
-        followers: 485000,
-        hypeScore: 99.8,
-        tags: ['Hero Shooter', 'MOBA', 'Third-Person', 'Competitive', 'Multiplayer'],
-        headerImage: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1422450/header.jpg',
-        isComingSoon: true,
-      },
-      {
-        id: 2719590,
-        name: 'Light No Fire',
-        releaseDate: '2026/2027',
-        publisher: 'Hello Games',
-        developer: 'Hello Games',
-        followers: 420000,
-        hypeScore: 98.6,
-        tags: ['Open World', 'Survival Craft', 'Multiplayer', 'Fantasy', 'Exploration'],
-        headerImage: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2719590/header.jpg',
-        isComingSoon: true,
-      },
-      {
-        id: 2769570,
-        name: 'Fable',
-        releaseDate: '2026 / 2027',
-        publisher: 'Xbox Game Studios',
-        developer: 'Playground Games',
-        followers: 340000,
-        hypeScore: 97.4,
-        tags: ['RPG', 'Action RPG', 'Fantasy', 'Open World', 'Story Rich'],
-        headerImage: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2769570/header.jpg',
-        isComingSoon: true,
-      },
-      {
-        id: 1030300,
-        name: 'Hollow Knight: Silksong',
-        releaseDate: '2026 Expected',
-        publisher: 'Team Cherry',
-        developer: 'Team Cherry',
-        followers: 512000,
-        hypeScore: 99.9,
-        tags: ['Metroidvania', 'Souls-like', 'Action', 'Indie', 'Difficult'],
-        headerImage: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1030300/header.jpg',
-        isComingSoon: true,
-      },
-    ];
-
-    // Filter out duplicates
-    const combined = [...curatedTop];
-    for (const item of finalReleases) {
-      if (!combined.some(c => c.id === item.id)) {
-        combined.push(item);
-      }
-    }
+    const combined = finalReleases;
 
     setCache(cacheKey, combined, 5 * 60 * 1000); // 5 min cache
     res.json({ success: true, releases: combined });
@@ -578,7 +563,7 @@ app.get('/api/steam/concurrent-activity', async (req, res) => {
   try {
     const timeframe = (req.query.timeframe as string) || 'day';
     const globalStats = await fetchSteamGlobalStats();
-    const liveInGame = globalStats.inGame || 7590000;
+    const liveInGame = globalStats.inGame;
 
     let dataPoints: { label: string; players: number; trend: number; peak?: number }[] = [];
     let currentCount = liveInGame;

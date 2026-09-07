@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { ActiveTab, Currency, SteamGame } from './types';
-import { INITIAL_GAMES } from './data/games';
 import { Header } from './components/Header';
 import { ChartsView } from './components/ChartsView';
 import { SalesView } from './components/SalesView';
@@ -12,7 +11,7 @@ import { Footer } from './components/Footer';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('charts');
-  const [games, setGames] = useState<SteamGame[]>(INITIAL_GAMES);
+  const [games, setGames] = useState<SteamGame[]>([]);
   const [selectedGame, setSelectedGame] = useState<SteamGame | null>(null);
 
   // Currency persistence
@@ -26,45 +25,21 @@ export default function App() {
     localStorage.setItem('steamdb_currency', currency);
   }, [currency]);
 
-  // Live Steam API integration for concurrent player counts
+  // Load the dashboard entirely from Steam at startup and refresh live counts.
   useEffect(() => {
-    const fetchLivePlayerCounts = async () => {
+    const fetchDashboard = async () => {
       try {
-        const appids = INITIAL_GAMES.map(g => g.id).join(',');
-        const res = await fetch(`/api/steam/player-counts?appids=${appids}`);
+        const res = await fetch('/api/steam/dashboard');
         if (!res.ok) return;
         const data = await res.json();
-        if (data && data.success && data.counts) {
-          setGames((prevGames) =>
-            prevGames.map((g) => {
-              const liveCount = data.counts[g.id];
-              if (typeof liveCount === 'number' && liveCount > 0) {
-                const newPeak24h = Math.max(g.peak24h, liveCount);
-                const updated24h = [...g.playerHistory24h];
-                if (updated24h.length > 0) {
-                  updated24h[updated24h.length - 1] = {
-                    ...updated24h[updated24h.length - 1],
-                    players: liveCount,
-                  };
-                }
-                return {
-                  ...g,
-                  currentPlayers: liveCount,
-                  peak24h: newPeak24h,
-                  playerHistory24h: updated24h,
-                };
-              }
-              return g;
-            })
-          );
-        }
+        if (data?.success && Array.isArray(data.games)) setGames(data.games);
       } catch {
-        // Fallback gracefully to default initialized figures
+        // Keep the empty state when Steam is unavailable.
       }
     };
 
-    fetchLivePlayerCounts();
-    const interval = setInterval(fetchLivePlayerCounts, 30000);
+    fetchDashboard();
+    const interval = setInterval(fetchDashboard, 60000);
     return () => clearInterval(interval);
   }, []);
 

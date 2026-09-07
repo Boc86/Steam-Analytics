@@ -51,8 +51,8 @@ export const Header = ({
   const [isSearchingLive, setIsSearchingLive] = useState(false);
   const [loadingGameId, setLoadingGameId] = useState<number | null>(null);
   const [globalStats, setGlobalStats] = useState<{ online: number; inGame: number; isLive: boolean }>({
-    online: 30050000,
-    inGame: 7590000,
+    online: 0,
+    inGame: 0,
     isLive: false,
   });
   const searchContainerRef = useRef<HTMLDivElement>(null);

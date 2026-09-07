@@ -58,25 +58,11 @@ export const ChartsView = ({
     trendPercent: string;
     data: { label: string; players: number; trend: number }[];
   }>({
-    currentCount: 7593860,
-    peakCount: 8940000,
-    avgCount: 6980000,
-    trendPercent: '+4.5%',
-    data: [
-      { label: '00:00', players: 5450000, trend: 5200000 },
-      { label: '02:00', players: 5080000, trend: 5450000 },
-      { label: '04:00', players: 4780000, trend: 5700000 },
-      { label: '06:00', players: 5010000, trend: 5950000 },
-      { label: '08:00', players: 5770000, trend: 6200000 },
-      { label: '10:00', players: 6680000, trend: 6450000 },
-      { label: '12:00', players: 7440000, trend: 6700000 },
-      { label: '14:00', players: 8050000, trend: 6950000 },
-      { label: '16:00', players: 8650000, trend: 7200000 },
-      { label: '18:00', players: 8940000, trend: 7450000 },
-      { label: '20:00', players: 8350000, trend: 7700000 },
-      { label: '22:00', players: 7890000, trend: 7950000 },
-      { label: 'Now', players: 7593860, trend: 8200000 },
-    ],
+    currentCount: 0,
+    peakCount: 0,
+    avgCount: 0,
+    trendPercent: '0%',
+    data: [],
   });
 
   useEffect(() => {

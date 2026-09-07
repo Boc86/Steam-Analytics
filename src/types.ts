@@ -2,7 +2,7 @@ export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD';
 
 export type DeckStatus = 'Verified' | 'Playable' | 'Unsupported' | 'Unknown';
 
-export type ProtonTier = 'Native' | 'Platinum' | 'Gold' | 'Silver' | 'Bronze' | 'Borked';
+export type ProtonTier = 'Native' | 'Platinum' | 'Gold' | 'Silver' | 'Bronze' | 'Borked' | 'Unknown';
 
 export type VGCGrade = 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'D' | 'F';
 
@@ -19,7 +19,7 @@ export interface PriceHistoryPoint {
 
 export interface ProtonDBData {
   tier: ProtonTier;
-  confidence: 'Strong' | 'High' | 'Good' | 'Moderate';
+  confidence: 'Strong' | 'High' | 'Good' | 'Moderate' | 'Unknown';
   totalReports: number;
   recommendedProton: string;
   launchOptions?: string;
