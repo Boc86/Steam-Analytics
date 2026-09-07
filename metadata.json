@@ -1,0 +1,6 @@
+{
+  "name": "Steam Analytics",
+  "description": "Live Steam Analytics platform featuring real-time concurrent player metrics with trend lines, upcoming release calendar straight from Steam APIs, ProtonDB Linux/Steam Deck ratings, and VideoGameCritic scores.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
