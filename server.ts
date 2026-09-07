@@ -1,6 +1,19 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+
+/** Read a secret from /etc/secrets/<name> (Render), env var, or local .env file */
+function readSecret(name: string): string | undefined {
+  // Render mounts secrets as files
+  try {
+    const secretPath = `/etc/secrets/${name}`;
+    const stat = fs.statSync(secretPath);
+    if (stat.isFile()) return fs.readFileSync(secretPath, 'utf-8').trim();
+  } catch {}
+  // Fallback to env var (local dev)
+  return process.env[name];
+}
 
 export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -323,6 +336,33 @@ app.get('/api/steam/dashboard', async (req, res) => {
         if (!d || d.type !== 'game') return null;
         const playerData = playerRes.ok ? await playerRes.json() : null;
         const currentPlayers = Number(playerData?.response?.player_count || 0);
+
+        // Fetch historical low from IsThereAnyDeal
+        let historicalLow = 0;
+        let historicalLowDate = 'Unavailable from Steam API';
+        try {
+          const itdaKey = readSecret('ITDA_API_KEY');
+          if (itdaKey) {
+            const itdaRes = await fetch('https://api.isthereanydeal.com/games/storelow/v2', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${itdaKey}`,
+              },
+              body: JSON.stringify({ stores: 'steam', appid: appId }),
+            });
+            if (itdaRes.ok) {
+              const itdaData = await itdaRes.json();
+              const storeData = itdaData?.data?.steam;
+              if (storeData?.price) {
+                historicalLow = Number(storeData.price) / 100;
+                historicalLowDate = storeData.date || 'Unknown date';
+              }
+            }
+          }
+        } catch (itdaErr) {
+          // I TAD unavailable, fall back to 0
+        }
         const [reviews, protonDB, steamCharts] = await Promise.all([
           fetchSteamReviewData(appId),
           fetchProtonDbData(appId),
@@ -345,8 +385,8 @@ app.get('/api/steam/dashboard', async (req, res) => {
           originalPrice,
           discountPercent: d.price_overview?.discount_percent || 0,
           priceCurrency,
-          historicalLow: 0,
-          historicalLowDate: 'Unavailable from Steam API',
+          historicalLow,
+          historicalLowDate,
           positiveReviews: reviews.positive,
           negativeReviews: reviews.negative,
           steamRating: reviews.rating,
@@ -540,6 +580,33 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       fetchProtonDbData(appId),
       fetchSteamChartsData(appId, currentPlayers),
     ]);
+
+    // Fetch historical low from IsThereAnyDeal
+    let historicalLow = 0;
+    let historicalLowDate = 'Unavailable from Steam API';
+    try {
+      const itdaKey = readSecret('ITDA_API_KEY');
+      if (itdaKey) {
+        const itdaRes = await fetch('https://api.isthereanydeal.com/games/storelow/v2', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${itdaKey}`,
+          },
+          body: JSON.stringify({ stores: 'steam', appid: appId }),
+        });
+        if (itdaRes.ok) {
+          const itdaData = await itdaRes.json();
+          const storeData = itdaData?.data?.steam;
+          if (storeData?.price) {
+            historicalLow = Number(storeData.price) / 100;
+            historicalLowDate = storeData.date || 'Unknown date';
+          }
+        }
+      }
+    } catch (itdaErr) {
+      // I TAD unavailable, fall back to 0
+    }
 
     const price = d.price_overview ? d.price_overview.final / 100 : 0;
     const originalPrice = d.price_overview ? d.price_overview.initial / 100 : price;
