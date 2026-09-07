@@ -232,7 +232,7 @@ export const ChartsView = ({
                 {formatPrice(topGame.price, currency)}
               </div>
               <div className="text-slate-500 text-xs mt-1 font-mono">
-                Historical Low: {formatPrice(topGame.historicalLow, currency)}
+                Historical Low: {topGame.historicalLow > 0 ? formatPrice(topGame.historicalLow, topGame.priceCurrency) : 'N/A'}
               </div>
             </div>
 

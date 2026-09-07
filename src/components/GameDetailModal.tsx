@@ -45,6 +45,7 @@ export const GameDetailModal = ({
   currency,
 }: GameDetailModalProps) => {
   const [chartTimeframe, setChartTimeframe] = useState<ConcurrentTimeframe>('day');
+  const [reviewTimeframe, setReviewTimeframe] = useState<ConcurrentTimeframe>('year');
   const [copiedAppId, setCopiedAppId] = useState(false);
   const [copiedLaunch, setCopiedLaunch] = useState(false);
 
@@ -126,7 +127,7 @@ export const GameDetailModal = ({
       year: 365 * 24 * 60 * 60 * 1000,
       all_time: Number.POSITIVE_INFINITY,
     };
-    const filtered = observations.filter((point) => chartTimeframe === 'all_time' || point.timestamp >= now - ranges[chartTimeframe]);
+    const filtered = observations.filter((point) => reviewTimeframe === 'all_time' || point.timestamp >= now - ranges[reviewTimeframe]);
     const buckets = new Map<string, { positive: number; negative: number; timestamp: number }>();
     for (const point of filtered) {
       const date = new Date(point.timestamp);
@@ -147,7 +148,7 @@ export const GameDetailModal = ({
       positive: bucket.positive,
       negative: bucket.negative,
     }));
-  }, [game.reviewHistory, chartTimeframe]);
+  }, [game.reviewHistory, reviewTimeframe]);
 
   const handleCopyAppId = () => {
     navigator.clipboard.writeText(game.id.toString());
@@ -249,7 +250,9 @@ export const GameDetailModal = ({
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase font-mono block font-bold">Historical Low</span>
-                    <span className="text-amber-400 font-mono font-bold">{formatPrice(game.historicalLow, currency)}</span>
+                    <span className="text-amber-400 font-mono font-bold">
+                      {game.historicalLow > 0 ? formatPrice(game.historicalLow, game.priceCurrency) : 'N/A'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -428,7 +431,7 @@ export const GameDetailModal = ({
 
           {/* Steam review trend */}
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-lg">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <div className="flex items-center gap-2 text-emerald-400 text-xs font-mono font-bold uppercase tracking-widest">
                   <ThumbsUp className="w-3.5 h-3.5" />
@@ -436,7 +439,24 @@ export const GameDetailModal = ({
                 </div>
                 <p className="text-xs text-slate-500 mt-1">Positive-review share from Steam observations in the selected timeframe.</p>
               </div>
-              <span className="text-xs text-slate-400 font-mono">{game.steamRating}% current</span>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs text-slate-400 font-mono">{game.steamRating}% current</span>
+                <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-2xl border border-slate-800">
+                  {(['day', 'week', 'month', 'year', 'all_time'] as ConcurrentTimeframe[]).map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setReviewTimeframe(tf)}
+                      className={`px-2 py-0.5 rounded-xl text-[10px] font-mono font-bold capitalize transition-colors ${
+                        reviewTimeframe === tf
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {tf === 'all_time' ? 'All' : tf}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             {reviewTrendData.length > 0 ? (
               <div className="h-52 w-full">

@@ -27,6 +27,16 @@ function setCache<T>(key: string, data: T, ttlMs: number): void {
   cache[key] = { data, expiry: Date.now() + ttlMs };
 }
 
+// Country codes mapped from currency for Steam's regional pricing API
+const CC_MAP: Record<string, string> = {
+  USD: 'US',
+  GBP: 'GB',
+  EUR: 'DE',
+  JPY: 'JP',
+  CAD: 'CA',
+  AUD: 'AU',
+};
+
 async function fetchSteamReviewData(appId: number): Promise<{
   positive: number;
   negative: number;
@@ -243,9 +253,10 @@ app.get('/api/steam/player-counts', async (req, res) => {
 });
 
 // Dashboard titles are selected from Steam's current featured catalog, then enriched from Steam app details.
-app.get('/api/steam/dashboard', async (_req, res) => {
+app.get('/api/steam/dashboard', async (req, res) => {
   try {
-    const categoryRes = await fetch('https://store.steampowered.com/api/featuredcategories/?l=english&cc=US');
+    const cc = CC_MAP[(req.query.cc as string) || 'USD'] || 'US';
+    const categoryRes = await fetch(`https://store.steampowered.com/api/featuredcategories/?l=english&cc=${cc}`);
     if (!categoryRes.ok) return res.status(502).json({ success: false, error: 'Steam catalog unavailable' });
     const categoryData = await categoryRes.json();
     const catalogItems = [
@@ -257,7 +268,7 @@ app.get('/api/steam/dashboard', async (_req, res) => {
     const games = (await Promise.all(appIds.map(async (appId) => {
       try {
         const [detailRes, playerRes] = await Promise.all([
-          fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=english&cc=US`),
+          fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=english&cc=${cc}`),
           fetch(`https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${appId}`),
         ]);
         const detailData = detailRes.ok ? await detailRes.json() : null;
@@ -274,6 +285,7 @@ app.get('/api/steam/dashboard', async (_req, res) => {
         const categories = (d.categories || []).map((category: any) => category.description);
         const price = d.price_overview ? d.price_overview.final / 100 : 0;
         const originalPrice = d.price_overview ? d.price_overview.initial / 100 : price;
+        const priceCurrency = d.price_overview?.currency || 'USD';
         return {
           id: d.steam_appid,
           name: d.name,
@@ -285,6 +297,7 @@ app.get('/api/steam/dashboard', async (_req, res) => {
           price,
           originalPrice,
           discountPercent: d.price_overview?.discount_percent || 0,
+          priceCurrency,
           historicalLow: 0,
           historicalLowDate: 'Unavailable from Steam API',
           positiveReviews: reviews.positive,
@@ -325,8 +338,9 @@ app.get('/api/steam/search', async (req, res) => {
     if (!q) {
       return res.json({ success: true, items: [] });
     }
+    const cc = CC_MAP[(req.query.cc as string) || 'USD'] || 'US';
 
-    const cacheKey = `search_${q.toLowerCase()}`;
+    const cacheKey = `search_${q.toLowerCase()}_${cc}`;
     const cached = getCached<any[]>(cacheKey);
     if (cached) {
       return res.json({ success: true, cached: true, items: cached });
@@ -339,7 +353,7 @@ app.get('/api/steam/search', async (req, res) => {
     if (isAppId) {
       const appIdNum = parseInt(q, 10);
       try {
-        const detailRes = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appIdNum}`);
+        const detailRes = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appIdNum}&l=english&cc=${cc}`);
         if (detailRes.ok) {
           const detailData = await detailRes.json();
           const d = detailData[appIdNum]?.data;
@@ -361,7 +375,7 @@ app.get('/api/steam/search', async (req, res) => {
 
     // 1. Query Steam Store Search API
     try {
-      const storeRes = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=english&cc=US`);
+      const storeRes = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=english&cc=${cc}`);
       if (storeRes.ok) {
         const storeData = await storeRes.json();
         for (const item of (storeData.items || [])) {
@@ -441,15 +455,16 @@ app.get('/api/steam/game/:appid', async (req, res) => {
     if (!appId) {
       return res.status(400).json({ success: false, error: 'Invalid AppID' });
     }
+    const cc = CC_MAP[(req.query.cc as string) || 'USD'] || 'US';
 
-    const cacheKey = `game_detail_${appId}`;
+    const cacheKey = `game_detail_${appId}_${cc}`;
     const cached = getCached<any>(cacheKey);
     if (cached) {
       return res.json({ success: true, cached: true, game: cached });
     }
 
-    // Fetch Steam appdetails
-    const detailRes = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=english&cc=US`);
+    // Fetch Steam appdetails with localized currency
+    const detailRes = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=english&cc=${cc}`);
     if (!detailRes.ok) {
       return res.status(502).json({ success: false, error: 'Steam API error' });
     }
@@ -480,6 +495,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
     const price = d.price_overview ? d.price_overview.final / 100 : 0;
     const originalPrice = d.price_overview ? d.price_overview.initial / 100 : price;
     const discountPercent = d.price_overview?.discount_percent || 0;
+    const priceCurrency = d.price_overview?.currency || 'USD';
 
     const peak24h = currentPlayers;
     const allTimePeak = steamCharts.allTimePeak;
@@ -509,6 +525,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       price,
       originalPrice,
       discountPercent,
+      priceCurrency,
       historicalLow: 0,
       historicalLowDate: 'Unavailable from Steam API',
       positiveReviews: reviews.positive,
@@ -786,6 +803,34 @@ app.get('/api/steam/concurrent-activity', async (req, res) => {
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// 4. List of currencies available on Steam (fetched live from Steam)
+const steamCurrenciesCache: { data: string[]; expiry: number } | null = null;
+app.get('/api/steam/currencies', async (_req, res) => {
+  const cacheKey = 'steam_currencies';
+  const cached = getCached<string[]>(cacheKey);
+  if (cached) {
+    return res.json({ success: true, currencies: cached });
+  }
+  try {
+    // Fetch from a known Steam store page to discover supported currencies
+    const resp = await fetch('https://store.steampowered.com/store/browse/?snr=1_8_9__265', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    if (resp.ok) {
+      const html = await resp.text();
+      // Extract currency codes from the page
+      const currencyMatches = html.matchAll(/"cc":\s*"([A-Z]{2})"/g);
+      const currencies = [...new Set([...currencyMatches].map(m => m[1]))].sort();
+      setCache(cacheKey, currencies, 60 * 60 * 1000); // 1 hour
+      return res.json({ success: true, currencies });
+    }
+  } catch {}
+  // Fallback: well-known Steam currency codes
+  const fallback = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'RUB', 'BRL', 'INR', 'KRW', 'TRY', 'MXN', 'SEK', 'NOK', 'DKK', 'PLN', 'THB', 'PHP', 'HUF', 'CZK', 'ILS', 'CLP', 'PEN', 'COP', 'AED', 'SAR'];
+  setCache(cacheKey, fallback, 60 * 60 * 1000);
+  return res.json({ success: true, currencies: fallback });
 });
 
 // Vite middleware / static fallback

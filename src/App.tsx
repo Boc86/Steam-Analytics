@@ -28,7 +28,7 @@ export default function App() {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const res = await fetch('/api/steam/dashboard');
+        const res = await fetch(`/api/steam/dashboard?cc=${currency}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data?.success && Array.isArray(data.games)) setGames(data.games);
@@ -40,7 +40,7 @@ export default function App() {
     fetchDashboard();
     const interval = setInterval(fetchDashboard, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [currency]);
 
   // Keyboard shortcut support: Escape closes modal, "/" focuses search
   useEffect(() => {
@@ -57,14 +57,14 @@ export default function App() {
   }, []);
 
   // Sync selectedGame with live updates
-  const activeSelectedGame = selectedGame 
-    ? games.find((g) => g.id === selectedGame.id) || selectedGame 
+  const activeSelectedGame = selectedGame
+    ? games.find((g) => g.id === selectedGame.id) || selectedGame
     : null;
 
   // Dynamically load any game from the entire Steam store by AppID
   const handleSelectGameById = async (appId: number) => {
     try {
-      const res = await fetch(`/api/steam/game/${appId}`);
+      const res = await fetch(`/api/steam/game/${appId}?cc=${currency}`);
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && data.game) {

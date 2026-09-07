@@ -12,7 +12,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { ActiveTab, Currency, SteamGame } from '../types';
-import { formatNumber, formatPrice } from '../utils/formatters';
+import { formatNumber, formatPrice, CURRENCY_SYMBOLS } from '../utils/formatters';
 
 export interface SteamLiveSearchResult {
   id: number;
@@ -33,6 +33,7 @@ interface HeaderProps {
   games: SteamGame[];
   onSelectGame: (game: SteamGame) => void;
   onSelectGameById?: (appId: number) => void;
+  currencies?: string[];
 }
 
 export const Header = ({
@@ -43,6 +44,7 @@ export const Header = ({
   games,
   onSelectGame,
   onSelectGameById,
+  currencies = [],
 }: HeaderProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -54,7 +56,21 @@ export const Header = ({
     inGame: 0,
     isLive: false,
   });
+  const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(currencies.length > 0 ? currencies : []);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Fetch Steam-recognized currencies on mount
+  useEffect(() => {
+    if (availableCurrencies.length > 0) return;
+    fetch('/api/steam/currencies')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.currencies)) {
+          setAvailableCurrencies(data.currencies);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch real-time Steam global network stats (Online users & Playing Now)
   useEffect(() => {
@@ -106,7 +122,7 @@ export const Header = ({
     setIsSearchingLive(true);
     const handler = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/steam/search?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`/api/steam/search?q=${encodeURIComponent(q)}&cc=${currency}`);
         if (res.ok) {
           const data = await res.json();
           if (data && data.success && Array.isArray(data.items)) {
@@ -215,12 +231,11 @@ export const Header = ({
                 onChange={(e) => setCurrency(e.target.value as Currency)}
                 className="bg-transparent text-[11px] font-bold text-slate-200 focus:outline-none cursor-pointer"
               >
-                <option value="USD" className="bg-slate-900">USD ($)</option>
-                <option value="EUR" className="bg-slate-900">EUR (€)</option>
-                <option value="GBP" className="bg-slate-900">GBP (£)</option>
-                <option value="JPY" className="bg-slate-900">JPY (¥)</option>
-                <option value="CAD" className="bg-slate-900">CAD (C$)</option>
-                <option value="AUD" className="bg-slate-900">AUD (A$)</option>
+                {availableCurrencies.map((code) => {
+                  const info = CURRENCY_SYMBOLS[code];
+                  if (!info) return null;
+                  return <option key={code} value={code} className="bg-slate-900">{code} ({info.symbol})</option>;
+                })}
               </select>
             </div>
           </div>

@@ -1,24 +1,44 @@
 import { Currency, DeckStatus, ProtonTier } from '../types';
 
-export const CURRENCY_RATES: Record<Currency, { symbol: string; rate: number; prefix: boolean }> = {
-  USD: { symbol: '$', rate: 1.0, prefix: true },
-  EUR: { symbol: '€', rate: 0.92, prefix: false },
-  GBP: { symbol: '£', rate: 0.78, prefix: true },
-  JPY: { symbol: '¥', rate: 154.5, prefix: true },
-  CAD: { symbol: 'C$', rate: 1.36, prefix: true },
-  AUD: { symbol: 'A$', rate: 1.52, prefix: true },
+export const CURRENCY_SYMBOLS: Record<string, { symbol: string; prefix: boolean }> = {
+  USD: { symbol: '$', prefix: true },
+  EUR: { symbol: '€', prefix: false },
+  GBP: { symbol: '£', prefix: true },
+  JPY: { symbol: '¥', prefix: true },
+  CAD: { symbol: 'C$', prefix: true },
+  AUD: { symbol: 'A$', prefix: true },
+  CHF: { symbol: 'CHF', prefix: true },
+  RUB: { symbol: '₽', prefix: false },
+  BRL: { symbol: 'R$', prefix: true },
+  INR: { symbol: '₹', prefix: true },
+  KRW: { symbol: '₩', prefix: true },
+  TRY: { symbol: '₺', prefix: true },
+  MXN: { symbol: 'Mex$', prefix: true },
+  SEK: { symbol: 'kr', prefix: false },
+  NOK: { symbol: 'kr', prefix: false },
+  DKK: { symbol: 'kr', prefix: false },
+  PLN: { symbol: 'zł', prefix: false },
+  THB: { symbol: '฿', prefix: true },
+  PHP: { symbol: '₱', prefix: true },
+  HUF: { symbol: 'Ft', prefix: false },
+  CZK: { symbol: 'Kč', prefix: false },
+  ILS: { symbol: '₪', prefix: true },
+  CLP: { symbol: 'CL$', prefix: true },
+  PEN: { symbol: 'S/', prefix: true },
+  COP: { symbol: 'COL$', prefix: true },
+  AED: { symbol: 'د.إ', prefix: true },
+  SAR: { symbol: '﷼', prefix: true },
 };
 
-export function formatPrice(priceUsd: number, currency: Currency): string {
-  if (priceUsd === 0) return 'Free';
-  const info = CURRENCY_RATES[currency] || CURRENCY_RATES.USD;
-  const converted = priceUsd * info.rate;
-  
-  if (currency === 'JPY') {
-    return `${info.symbol}${Math.round(converted).toLocaleString()}`;
+export function formatPrice(price: number, currency: string): string {
+  if (price === 0) return 'N/A';
+  const info = CURRENCY_SYMBOLS[currency] || CURRENCY_SYMBOLS.USD;
+
+  if (currency === 'JPY' || currency === 'KRW' || currency === 'THB' || currency === 'PHP' || currency === 'HUF' || currency === 'CZK') {
+    return `${info.symbol}${Math.round(price).toLocaleString()}`;
   }
-  
-  const formattedNum = converted.toFixed(2);
+
+  const formattedNum = price.toFixed(2);
   return info.prefix ? `${info.symbol}${formattedNum}` : `${formattedNum} ${info.symbol}`;
 }
 
@@ -56,8 +76,8 @@ export function getProtonTierColor(tier: ProtonTier): { bg: string; text: string
       return {
         bg: 'bg-amber-400/15',
         text: 'text-amber-300',
-        border: 'border-amber-400/40',
-        glow: 'shadow-amber-400/20',
+        border: 'border-amber-500/40',
+        glow: 'shadow-amber-500/20',
       };
     case 'Silver':
       return {
@@ -127,4 +147,3 @@ export function getDeckStatusBadge(status: DeckStatus): { label: string; icon: s
       };
   }
 }
-
