@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 
-const app = express();
+export const app = express();
 const PORT = 3000;
 
 app.use(express.json());
@@ -714,4 +714,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.VERCEL !== '1') {
+  startServer();
+}
