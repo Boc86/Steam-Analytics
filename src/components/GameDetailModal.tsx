@@ -64,12 +64,28 @@ export const GameDetailModal = ({
     const daysRange = (newest - oldest) / (1000 * 60 * 60 * 24);
     const monthsRange = daysRange / 30;
 
-    const options: ConcurrentTimeframe[] = ['month', 'year'];
-    if (monthsRange >= 12) options.push('all_time');
+    // Always include filters that make sense for the data
+    const options: ConcurrentTimeframe[] = [];
 
-    // Auto-select best default filter
-    if (monthsRange < 1) return ['month'];
-    if (monthsRange < 12) return ['month', 'year'];
+    // Day/Week only if we have recent daily data (< 30 days)
+    if (monthsRange < 1) {
+      options.push('day', 'week');
+    } else if (monthsRange < 3) {
+      options.push('week');
+    }
+
+    // Month filter if we have at least 1 month
+    if (monthsRange >= 0.5) options.push('month');
+
+    // Year filter if we have at least 12 months
+    if (monthsRange >= 12) options.push('year');
+
+    // All time if we have at least 24 months
+    if (monthsRange >= 24) options.push('all_time');
+
+    // Fallback
+    if (!options.length) options.push('month');
+
     return options;
   }, [game.reviewHistory]);
 
@@ -173,6 +189,12 @@ export const GameDetailModal = ({
     };
     const filtered = observations.filter((point) => reviewTimeframe === 'all_time' || point.timestamp >= nowTimestamp - ranges[reviewTimeframe]);
 
+    // Separate daily vs monthly data for proper bucketing
+    const isDailyData = (date: Date) => {
+      // Daily data has time component or is within last 30 days
+      return date.getTime() > nowTimestamp - 31 * 24 * 60 * 60 * 1000;
+    };
+
     // Group by appropriate granularity
     const buckets = new Map<string, { positive: number; negative: number; label: string }>();
     for (const point of filtered) {
@@ -180,7 +202,16 @@ export const GameDetailModal = ({
       let key: string;
       let label: string;
 
-      if (reviewTimeframe === 'month') {
+      if (reviewTimeframe === 'day') {
+        // Hourly buckets for day view (only for recent daily data)
+        const h = date.getHours();
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-H${h}`;
+        label = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(h).padStart(2, '0')}:00`;
+      } else if (reviewTimeframe === 'week') {
+        // Daily buckets for week view
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        label = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      } else if (reviewTimeframe === 'month') {
         // Monthly buckets
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         label = date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
@@ -189,7 +220,7 @@ export const GameDetailModal = ({
         key = String(date.getFullYear());
         label = String(date.getFullYear());
       } else {
-        // Default to monthly
+        // All time - show by month for long history
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         label = date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
       }
