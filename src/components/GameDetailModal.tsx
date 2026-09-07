@@ -131,7 +131,8 @@ export const GameDetailModal = ({
       .sort((a, b) => a.timestamp - b.timestamp);
     if (!observations.length) return [];
 
-    const now = Date.now();
+    const now = new Date();
+    const nowTimestamp = now.getTime();
     const ranges: Record<ConcurrentTimeframe, number> = {
       day: 24 * 60 * 60 * 1000,
       week: 7 * 24 * 60 * 60 * 1000,
@@ -139,9 +140,9 @@ export const GameDetailModal = ({
       year: 365 * 24 * 60 * 60 * 1000,
       all_time: Number.POSITIVE_INFINITY,
     };
-    const filtered = observations.filter((point) => reviewTimeframe === 'all_time' || point.timestamp >= now - ranges[reviewTimeframe]);
+    const filtered = observations.filter((point) => reviewTimeframe === 'all_time' || point.timestamp >= nowTimestamp - ranges[reviewTimeframe]);
 
-    // Group by appropriate granularity
+    // Group by appropriate granularity (matching player chart)
     const buckets = new Map<string, { positive: number; negative: number; label: string }>();
     for (const point of filtered) {
       const date = new Date(point.timestamp);
@@ -158,15 +159,23 @@ export const GameDetailModal = ({
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         label = date.toLocaleString(undefined, { month: 'short', day: 'numeric' });
       } else if (reviewTimeframe === 'month') {
-        // Weekly buckets for month view
-        const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
+        // Weekly buckets for current month
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const dayOfYear = Math.floor((date.getTime() - new Date(year, 0, 0).getTime()) / 86400000);
         const weekNum = Math.floor(dayOfYear / 7);
-        key = `${date.getFullYear()}-W${weekNum}`;
-        label = `Week ${weekNum + 1}`;
+        const weekStart = new Date(year, month, weekNum * 7 + 1);
+        const weekEnd = new Date(year, month, Math.min((weekNum + 1) * 7, new Date(year, month + 1, 0).getDate()));
+        key = `${year}-W${weekNum}`;
+        label = `${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}–${weekEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
       } else if (reviewTimeframe === 'year') {
-        // Monthly buckets for year view
+        // Monthly buckets for last 12 months
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const monthIndex = (currentMonth - 11 + date.getMonth() + 12) % 12;
+        const yearDiff = currentYear - date.getFullYear();
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        label = date.toLocaleString(undefined, { month: 'short', year: 'numeric' });
+        label = date.toLocaleString(undefined, { month: 'short', year: '2-digit' });
       } else {
         // Yearly buckets for all-time view
         key = String(date.getFullYear());
