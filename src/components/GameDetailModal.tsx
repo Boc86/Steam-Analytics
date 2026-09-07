@@ -33,7 +33,6 @@ import {
   formatNumber, 
   formatPrice, 
   getProtonTierColor, 
-  getVGCGradeColor, 
   getDeckStatusBadge 
 } from '../utils/formatters';
 
@@ -53,7 +52,6 @@ export const GameDetailModal = ({
   const [copiedLaunch, setCopiedLaunch] = useState(false);
 
   const protonColor = getProtonTierColor(game.protonDB.tier);
-  const vgcColor = game.videoGameCritic ? getVGCGradeColor(game.videoGameCritic.grade) : null;
   const deckBadge = getDeckStatusBadge(game.deckStatus);
 
   const timeframeData = useMemo(() => {
@@ -481,54 +479,21 @@ export const GameDetailModal = ({
                     <Gamepad2 className="w-4 h-4 text-amber-400" />
                     <h3 className="font-bold text-white text-base">The Video Games Critic</h3>
                   </div>
-                  {game.videoGameCritic && (
-                    <div className={`w-9 h-9 rounded-full border-2 flex items-center justify-center font-black font-mono text-sm shadow-md ${vgcColor?.bg} ${vgcColor?.text} ${vgcColor?.border}`}>
-                      {game.videoGameCritic.grade}
+                  {typeof game.videoGameCritic?.score === 'number' && (
+                    <div className="w-12 h-9 rounded-full border-2 border-amber-500/40 bg-amber-950/80 text-amber-400 flex items-center justify-center font-black font-mono text-sm shadow-md">
+                      {game.videoGameCritic.score}/100
                     </div>
                   )}
                 </div>
 
-                {game.videoGameCritic ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <span>Reviewed: <strong className="text-slate-200">{game.videoGameCritic.platformReviewed}</strong></span>
-                      <span>•</span>
-                      <span>{game.videoGameCritic.reviewDate}</span>
-                    </div>
+                <div className="py-5 text-center text-slate-400 text-xs">
+                  {typeof game.videoGameCritic?.score === 'number' ? `Authorized VGC score: ${game.videoGameCritic.score}/100` : 'No authorized VGC score is imported for this title.'}
+                </div>
 
-                    <blockquote className="italic text-slate-200 bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 text-xs leading-relaxed">
-                      "{game.videoGameCritic.excerpt}"
-                    </blockquote>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                        <span className="text-emerald-400 font-bold text-[10px] uppercase tracking-wider block mb-1">
-                          Pros
-                        </span>
-                        <ul className="space-y-0.5 text-[11px] text-slate-300">
-                          {(game.videoGameCritic.pros || []).map((pro, i) => (
-                            <li key={`modal-pro-${i}`}>• {pro}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                        <span className="text-red-400 font-bold text-[10px] uppercase tracking-wider block mb-1">
-                          Cons
-                        </span>
-                        <ul className="space-y-0.5 text-[11px] text-slate-300">
-                          {(game.videoGameCritic.cons || []).map((con, i) => (
-                            <li key={`modal-con-${i}`}>• {con}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-8 text-center text-slate-500 text-xs">
-                    No retro or modern critic entry indexed for this title yet.
-                  </div>
-                )}
+                <a href={game.videoGameCritic?.url || `https://www.google.com/search?q=site%3Avideogamescritic.com+${encodeURIComponent(game.name)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 w-full text-amber-400 hover:text-amber-300 text-xs font-bold">
+                  <span>Open VideoGameCritic source</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
 
               <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs">

@@ -4,8 +4,6 @@ export type DeckStatus = 'Verified' | 'Playable' | 'Unsupported' | 'Unknown';
 
 export type ProtonTier = 'Native' | 'Platinum' | 'Gold' | 'Silver' | 'Bronze' | 'Borked' | 'Unknown';
 
-export type VGCGrade = 'A+' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'D' | 'F';
-
 export interface PlayerHistoryPoint {
   time: string;
   players: number;
@@ -29,14 +27,13 @@ export interface ProtonDBData {
 }
 
 export interface VideoGameCriticData {
-  grade: VGCGrade;
-  platformReviewed: string;
-  reviewDate: string;
-  excerpt: string;
-  pros: string[];
-  cons: string[];
+  score?: number;
+  scoreScale?: 'vgc-100';
+  confidence?: string;
+  trend?: string;
+  platform?: string;
+  observedAt?: string;
   url: string;
-  reviewerScoreLabel?: string;
 }
 
 export interface SteamGame {

@@ -15,7 +15,6 @@ import {
   formatPrice, 
   formatNumber, 
   getProtonTierColor, 
-  getVGCGradeColor 
 } from '../utils/formatters';
 
 interface SalesViewProps {
@@ -191,7 +190,6 @@ export const SalesView = ({
         ) : (
           salesGames.map((game) => {
             const protonColor = getProtonTierColor(game.protonDB.tier);
-            const vgcColor = game.videoGameCritic ? getVGCGradeColor(game.videoGameCritic.grade) : null;
             const isHistoricalLow = game.price <= game.historicalLow;
 
             return (
@@ -240,10 +238,10 @@ export const SalesView = ({
                       Proton: {game.protonDB.tier}
                     </span>
 
-                    {game.videoGameCritic && (
-                      <span className={`px-2.5 py-0.5 rounded-full border font-bold text-[11px] flex items-center gap-1 ${vgcColor?.bg} ${vgcColor?.text} ${vgcColor?.border}`}>
+                    {typeof game.videoGameCritic?.score === 'number' && (
+                      <span className="px-2.5 py-0.5 rounded-full border border-amber-500/40 bg-amber-950/80 text-amber-400 font-bold text-[11px] flex items-center gap-1">
                         <span>VGC:</span>
-                        <strong className="font-mono">{game.videoGameCritic.grade}</strong>
+                        <strong className="font-mono">{game.videoGameCritic.score}/100</strong>
                       </span>
                     )}
 

@@ -27,7 +27,6 @@ import {
   formatNumber, 
   formatPrice, 
   getProtonTierColor, 
-  getVGCGradeColor, 
   getDeckStatusBadge 
 } from '../utils/formatters';
 
@@ -438,13 +437,13 @@ export const ChartsView = ({
 
             <div className="flex flex-col items-center my-2">
               <div className="text-4xl sm:text-5xl font-black text-blue-500 font-mono">
-                {topGame.videoGameCritic?.grade || 'A'}
+                {typeof topGame.videoGameCritic?.score === 'number' ? topGame.videoGameCritic.score : '--'}
               </div>
               <div className="text-slate-400 text-xs mt-2 font-medium">
-                {topGame.videoGameCritic ? `Grade ${topGame.videoGameCritic.grade} Review` : 'Highly Acclaimed'}
+                {topGame.videoGameCritic ? 'VGC score' : 'Not imported'}
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5">
-                {topGame.videoGameCritic?.platformReviewed || 'PC'} Edition
+                {topGame.videoGameCritic?.platform || 'Authorized source required'}
               </div>
             </div>
 
@@ -642,7 +641,6 @@ export const ChartsView = ({
               ) : (
                 processedGames.map((game, idx) => {
                   const protonColor = getProtonTierColor(game.protonDB.tier);
-                  const vgcColor = game.videoGameCritic ? getVGCGradeColor(game.videoGameCritic.grade) : null;
                   const deckBadge = getDeckStatusBadge(game.deckStatus);
 
                   return (
@@ -741,10 +739,10 @@ export const ChartsView = ({
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className={`inline-flex items-center justify-center w-7 h-7 rounded-full font-black text-xs border transition-all hover:scale-110 shadow-sm ${vgcColor?.bg} ${vgcColor?.text} ${vgcColor?.border}`}
-                            title={`The Video Games Critic Grade: ${game.videoGameCritic.grade} (${game.videoGameCritic.platformReviewed})`}
+                            className="inline-flex items-center justify-center min-w-7 h-7 px-1 rounded-full font-black text-xs border border-amber-500/40 text-amber-400 bg-amber-950/80 transition-all hover:scale-110 shadow-sm"
+                            title={`VideoGameCritic score: ${game.videoGameCritic.score ?? 'unavailable'}/100`}
                           >
-                            {game.videoGameCritic.grade}
+                            {typeof game.videoGameCritic.score === 'number' ? game.videoGameCritic.score : '?'}
                           </a>
                         ) : (
                           <span className="text-slate-600 font-mono text-xs">-</span>

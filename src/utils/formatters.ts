@@ -1,4 +1,4 @@
-import { Currency, DeckStatus, ProtonTier, VGCGrade } from '../types';
+import { Currency, DeckStatus, ProtonTier } from '../types';
 
 export const CURRENCY_RATES: Record<Currency, { symbol: string; rate: number; prefix: boolean }> = {
   USD: { symbol: '$', rate: 1.0, prefix: true },
@@ -128,33 +128,26 @@ export function getDeckStatusBadge(status: DeckStatus): { label: string; icon: s
   }
 }
 
-export function getVGCGradeColor(grade: VGCGrade): { bg: string; text: string; border: string } {
-  if (grade.startsWith('A')) {
+export function getVGCScoreColor(score: number): { bg: string; text: string; border: string } {
+  if (score >= 80) {
     return {
       bg: 'bg-emerald-950/80',
       text: 'text-emerald-400',
       border: 'border-emerald-500/40',
     };
   }
-  if (grade.startsWith('B')) {
+  if (score >= 60) {
     return {
       bg: 'bg-blue-950/80',
       text: 'text-blue-400',
       border: 'border-blue-500/40',
     };
   }
-  if (grade.startsWith('C')) {
+  if (score >= 40) {
     return {
       bg: 'bg-amber-950/80',
       text: 'text-amber-400',
       border: 'border-amber-500/40',
-    };
-  }
-  if (grade.startsWith('D')) {
-    return {
-      bg: 'bg-orange-950/80',
-      text: 'text-orange-400',
-      border: 'border-orange-500/40',
     };
   }
   return {
