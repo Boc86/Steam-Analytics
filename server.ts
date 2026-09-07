@@ -27,6 +27,78 @@ function setCache<T>(key: string, data: T, ttlMs: number): void {
   cache[key] = { data, expiry: Date.now() + ttlMs };
 }
 
+async function fetchSteamReviewData(appId: number): Promise<{
+  positive: number;
+  negative: number;
+  rating: number;
+  status: string;
+}> {
+  try {
+    const response = await fetch(`https://store.steampowered.com/appreviews/${appId}?json=1&language=all&purchase_type=all`);
+    const summary = response.ok ? (await response.json()).query_summary : null;
+    const positive = Number(summary?.total_positive || 0);
+    const negative = Number(summary?.total_negative || 0);
+    const total = positive + negative;
+    const rating = total > 0 ? Math.round((positive / total) * 100) : 0;
+    const status = rating >= 95 ? 'Overwhelmingly Positive' : rating >= 80 ? 'Very Positive' : rating >= 70 ? 'Positive' : rating >= 40 ? 'Mostly Positive' : 'Mixed';
+    return { positive, negative, rating, status };
+  } catch {
+    return { positive: 0, negative: 0, rating: 0, status: 'Mixed' };
+  }
+}
+
+async function fetchProtonDbData(appId: number) {
+  const result = {
+    tier: 'Unknown', confidence: 'Unknown', totalReports: 0,
+    recommendedProton: 'Unavailable', tinkerSteps: 'No ProtonDB data loaded.',
+    url: `https://www.protondb.com/app/${appId}`,
+  };
+  try {
+    const response = await fetch(`https://www.protondb.com/api/v1/reports/summaries/${appId}.json`);
+    const data = response.ok ? await response.json() : null;
+    if (data?.tier) result.tier = data.tier.charAt(0).toUpperCase() + data.tier.slice(1);
+    if (data?.confidence) result.confidence = data.confidence.charAt(0).toUpperCase() + data.confidence.slice(1);
+    result.totalReports = Number(data?.total || 0);
+  } catch {}
+  return result;
+}
+
+async function fetchSteamChartsData(appId: number, currentPlayers: number) {
+  const result: { allTimePeak: number; allTimePeakDate: string; playerHistory24h: { time: string; players: number }[]; playerHistory7d: { time: string; players: number }[] } = {
+    allTimePeak: 0,
+    allTimePeakDate: 'Unavailable',
+    playerHistory24h: [],
+    playerHistory7d: [],
+  };
+  try {
+    const response = await fetch(`https://steamcharts.com/app/${appId}`, { headers: { 'User-Agent': 'Steam Analytics/1.0' } });
+    if (!response.ok) return result;
+    const html = await response.text();
+    const peakMatch = html.match(/([\d,]+)\s*(?:<\/[^>]+>\s*){0,3}all-time peak/i);
+    if (peakMatch) result.allTimePeak = Number(peakMatch[1].replace(/,/g, ''));
+    const dateMatch = html.match(/all-time peak[\s\S]{0,300}?([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})/i);
+    if (dateMatch) result.allTimePeakDate = dateMatch[1];
+
+    const points: { timestamp: number; players: number }[] = [];
+    const seriesPattern = /data\s*:\s*\[((?:\s*\[\s*\d+\s*,\s*\d+\s*\]\s*,?)+)\s*\]/g;
+    for (const match of html.matchAll(seriesPattern)) {
+      for (const point of match[1].matchAll(/\[\s*(\d+)\s*,\s*(\d+)\s*\]/g)) {
+        points.push({ timestamp: Number(point[1]), players: Number(point[2]) });
+      }
+      if (points.length > 400) break;
+    }
+    const uniquePoints = Array.from(new Map(points.map(point => [point.timestamp, point])).values()).sort((a, b) => a.timestamp - b.timestamp);
+    const recent = uniquePoints.slice(-Math.min(uniquePoints.length, 168));
+    result.playerHistory24h = recent.slice(-24).map(point => ({ time: new Date(point.timestamp * 1000).toISOString().slice(11, 16), players: point.players }));
+    result.playerHistory7d = recent.map(point => ({ time: new Date(point.timestamp * 1000).toISOString().slice(0, 10), players: point.players }));
+    if (!result.playerHistory24h.length && currentPlayers > 0) {
+      result.playerHistory24h = [{ time: 'Now', players: currentPlayers }];
+      result.playerHistory7d = [{ time: 'Today', players: currentPlayers }];
+    }
+  } catch {}
+  return result;
+}
+
 // Global Steam Network Statistics (Live Online & In-Game concurrent users)
 async function fetchSteamGlobalStats(): Promise<{ online: number; inGame: number; success: boolean }> {
   const cacheKey = 'steam_global_stats';
@@ -140,7 +212,11 @@ app.get('/api/steam/dashboard', async (_req, res) => {
         if (!d || d.type !== 'game') return null;
         const playerData = playerRes.ok ? await playerRes.json() : null;
         const currentPlayers = Number(playerData?.response?.player_count || 0);
-        const positiveReviews = Number(d.recommendations?.total || 0);
+        const [reviews, protonDB, steamCharts] = await Promise.all([
+          fetchSteamReviewData(appId),
+          fetchProtonDbData(appId),
+          fetchSteamChartsData(appId, currentPlayers),
+        ]);
         const genres = (d.genres || []).map((genre: any) => genre.description);
         const categories = (d.categories || []).map((category: any) => category.description);
         const price = d.price_overview ? d.price_overview.final / 100 : 0;
@@ -151,33 +227,26 @@ app.get('/api/steam/dashboard', async (_req, res) => {
           headerImage: d.header_image,
           currentPlayers,
           peak24h: currentPlayers,
-          allTimePeak: 0,
-          allTimePeakDate: 'Unavailable from Steam API',
+          allTimePeak: steamCharts.allTimePeak,
+          allTimePeakDate: steamCharts.allTimePeakDate,
           price,
           originalPrice,
           discountPercent: d.price_overview?.discount_percent || 0,
           historicalLow: 0,
           historicalLowDate: 'Unavailable from Steam API',
-          positiveReviews,
-          negativeReviews: 0,
-          steamRating: 0,
-          ratingStatus: 'Mixed',
+          positiveReviews: reviews.positive,
+          negativeReviews: reviews.negative,
+          steamRating: reviews.rating,
+          ratingStatus: reviews.status,
           releaseDate: d.release_date?.date || 'Release date unavailable',
           developer: d.developers?.[0] || 'Developer unavailable',
           publisher: d.publishers?.[0] || 'Publisher unavailable',
           genres,
           tags: [...new Set([...genres, ...categories])].slice(0, 10),
           deckStatus: d.platforms?.linux ? 'Verified' : 'Unknown',
-          protonDB: {
-            tier: 'Unknown',
-            confidence: 'Unknown',
-            totalReports: 0,
-            recommendedProton: 'Unavailable',
-            tinkerSteps: 'No ProtonDB data loaded.',
-            url: `https://www.protondb.com/app/${d.steam_appid}`,
-          },
-          playerHistory24h: [],
-          playerHistory7d: [],
+          protonDB,
+          playerHistory24h: steamCharts.playerHistory24h,
+          playerHistory7d: steamCharts.playerHistory7d,
           priceHistory: [],
           achievementsCount: d.achievements?.total || 0,
           depotsCount: 0,
@@ -354,42 +423,26 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       }
     } catch {}
 
-    // Fetch ProtonDB summary
-    let protonTier = 'Unknown';
-    let protonConfidence = 'Unknown';
-    let protonReports = 0;
-    try {
-      const protoRes = await fetch(`https://www.protondb.com/api/v1/reports/summaries/${appId}.json`);
-      if (protoRes.ok) {
-        const protoData = await protoRes.json();
-        if (protoData.tier) {
-          protonTier = protoData.tier.charAt(0).toUpperCase() + protoData.tier.slice(1);
-        }
-        if (protoData.confidence) {
-          protonConfidence = protoData.confidence.charAt(0).toUpperCase() + protoData.confidence.slice(1);
-        }
-        if (protoData.total) {
-          protonReports = protoData.total;
-        }
-      }
-    } catch {}
+    const [reviews, protonDB, steamCharts] = await Promise.all([
+      fetchSteamReviewData(appId),
+      fetchProtonDbData(appId),
+      fetchSteamChartsData(appId, currentPlayers),
+    ]);
 
     const price = d.price_overview ? d.price_overview.final / 100 : 0;
     const originalPrice = d.price_overview ? d.price_overview.initial / 100 : price;
     const discountPercent = d.price_overview?.discount_percent || 0;
 
-    const playerHistory24h: any[] = [];
-    const playerHistory7d: any[] = [];
     const peak24h = currentPlayers;
-    const allTimePeak = 0;
+    const allTimePeak = steamCharts.allTimePeak;
 
     const genres = (d.genres || []).map((g: any) => g.description);
     const categories = (d.categories || []).map((c: any) => c.description);
     const tags = Array.from(new Set([...genres, ...categories])).slice(0, 10);
 
-    const deckStatus = (d.platforms?.linux || protonTier === 'Platinum' || protonTier === 'Native') 
+    const deckStatus = (d.platforms?.linux || protonDB.tier === 'Platinum' || protonDB.tier === 'Native') 
       ? 'Verified' 
-      : protonTier === 'Unknown' ? 'Unknown' : (protonTier === 'Gold' || protonTier === 'Silver' ? 'Playable' : 'Unsupported');
+      : protonDB.tier === 'Unknown' ? 'Unknown' : (protonDB.tier === 'Gold' || protonDB.tier === 'Silver' ? 'Playable' : 'Unsupported');
 
     const cleanDescription = (d.short_description || '')
       .replace(/<[^>]+>/g, ' ')
@@ -404,32 +457,25 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       currentPlayers,
       peak24h,
       allTimePeak,
-      allTimePeakDate: 'Recorded Peak',
+      allTimePeakDate: steamCharts.allTimePeakDate,
       price,
       originalPrice,
       discountPercent,
       historicalLow: 0,
       historicalLowDate: 'Unavailable from Steam API',
-      positiveReviews: d.recommendations?.total || 0,
-      negativeReviews: 0,
-      steamRating: d.metacritic?.score || 0,
-      ratingStatus: (d.metacritic?.score > 85 ? 'Very Positive' : (d.metacritic?.score > 70 ? 'Positive' : 'Mostly Positive')),
+      positiveReviews: reviews.positive,
+      negativeReviews: reviews.negative,
+      steamRating: reviews.rating,
+      ratingStatus: reviews.status,
       releaseDate: d.release_date?.date || 'Available on Steam',
       developer: d.developers?.[0] || 'Studio Developer',
       publisher: d.publishers?.[0] || 'Publisher',
       genres,
       tags,
       deckStatus,
-      protonDB: {
-        tier: protonTier,
-        confidence: protonConfidence,
-        totalReports: protonReports,
-        recommendedProton: 'Unavailable',
-        tinkerSteps: 'No ProtonDB data loaded.',
-        url: `https://www.protondb.com/app/${d.steam_appid}`,
-      },
-      playerHistory24h,
-      playerHistory7d,
+      protonDB,
+      playerHistory24h: steamCharts.playerHistory24h,
+      playerHistory7d: steamCharts.playerHistory7d,
       priceHistory: [
         { date: 'Current', price, discount: discountPercent },
       ],
