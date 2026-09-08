@@ -346,13 +346,13 @@ app.get('/api/steam/dashboard', async (req, res) => {
         try {
           const itdaKey = readSecret('ITDA_API_KEY');
           if (itdaKey) {
-            // Step 1: Convert Steam appid → I TAD UUID
-            const lookupUrl = `https://api.isthereanydeal.com/games/lookup/v1?key=${itdaKey}&appid=${appId}`;
+            // Step 1: Get game name from Steam, then lookup I TAD by title
+            const lookupUrl = `https://api.isthereanydeal.com/games/lookup/v1?key=${itdaKey}&title=${encodeURIComponent(d.name || '')}`;
             const lookupRes = await fetch(lookupUrl);
             if (lookupRes.ok) {
               const lookupData = await lookupRes.json();
-              const itadUuid = lookupData?.game?.id;
-              if (itadUuid) {
+              if (lookupData?.found && lookupData?.game?.title?.toLowerCase().includes((d.name || '').toLowerCase().slice(0, 10))) {
+                const itadUuid = lookupData.game.id;
                 // Step 2: Get store lows using I TAD UUID
                 const slRes = await fetch('https://api.isthereanydeal.com/games/storelow/v2', {
                   method: 'POST',
@@ -601,31 +601,53 @@ app.get('/api/steam/game/:appid', async (req, res) => {
     try {
       const itdaKey = readSecret('ITDA_API_KEY');
       if (itdaKey) {
-        // Step 1: Convert Steam appid → I TAD UUID
-        const lookupUrl = `https://api.isthereanydeal.com/games/lookup/v1?key=${itdaKey}&appid=${appId}`;
-        const lookupRes = await fetch(lookupUrl);
-        if (lookupRes.ok) {
-          const lookupData = await lookupRes.json();
-          const itadUuid = lookupData?.game?.id;
-          if (itadUuid) {
-            // Step 2: Get store lows using I TAD UUID
-            const slRes = await fetch('https://api.isthereanydeal.com/games/storelow/v2', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'ITAD-API-Key': itdaKey,
-              },
-              body: JSON.stringify([itadUuid]),
-            });
-            if (slRes.ok) {
-              const slData = await slRes.json();
-              // Find Steam shop (id: 61) in the lows
-              const steamLow = slData?.[0]?.lows?.find((l: any) => l.shop?.id === 61);
-              if (steamLow?.price) {
-                historicalLow = Number(steamLow.price.amount);
-                historicalLowDate = steamLow.timestamp || 'Unknown date';
+        // Step 1: Lookup I TAD UUID by game title with retries
+        const lookupUrl = `https://api.isthereanydeal.com/games/lookup/v1?key=${itdaKey}&title=${encodeURIComponent(d.name || '')}`;
+        let itadUuid: string | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const lookupRes = await fetch(lookupUrl);
+            if (lookupRes.ok) {
+              const lookupData = await lookupRes.json();
+              if (lookupData?.found && lookupData?.game?.title?.toLowerCase().includes((d.name || '').toLowerCase().slice(0, 10))) {
+                itadUuid = lookupData.game.id;
+                break;
               }
+            } else if (lookupRes.status === 429) {
+              await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+            } else {
+              break;
             }
+          } catch {}
+        }
+
+        // Step 2: Get store lows using I TAD UUID with retries
+        if (itadUuid) {
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const slRes = await fetch('https://api.isthereanydeal.com/games/storelow/v2', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'ITAD-API-Key': itdaKey,
+                },
+                body: JSON.stringify([itadUuid]),
+              });
+              if (slRes.ok) {
+                const slData = await slRes.json();
+                // Find Steam shop (id: 61) in the lows
+                const steamLow = slData?.[0]?.lows?.find((l: any) => l.shop?.id === 61);
+                if (steamLow?.price) {
+                  historicalLow = Number(steamLow.price.amount);
+                  historicalLowDate = steamLow.timestamp || 'Unknown date';
+                  break;
+                }
+              } else if (slRes.status === 429) {
+                await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+              } else {
+                break;
+              }
+            } catch {}
           }
         }
       }
