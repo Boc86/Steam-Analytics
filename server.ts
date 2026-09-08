@@ -343,6 +343,7 @@ app.get('/api/steam/dashboard', async (req, res) => {
         // Fetch historical low from IsThereAnyDeal
         let historicalLow = 0;
         let historicalLowDate = 'Unavailable from Steam API';
+        let historicalLowCurrency = 'USD';
         try {
           const itdaKey = readSecret('ITDA_API_KEY');
           if (itdaKey) {
@@ -354,7 +355,7 @@ app.get('/api/steam/dashboard', async (req, res) => {
               if (lookupData?.found && lookupData?.game?.title?.toLowerCase().includes((d.name || '').toLowerCase().slice(0, 10))) {
                 const itadUuid = lookupData.game.id;
                 // Step 2: Get store lows using I TAD UUID
-                const slRes = await fetch('https://api.isthereanydeal.com/games/storelow/v2', {
+                const slRes = await fetch(`https://api.isthereanydeal.com/games/storelow/v2?country=${cc}`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -368,6 +369,7 @@ app.get('/api/steam/dashboard', async (req, res) => {
                   const steamLow = slData?.[0]?.lows?.find((l: any) => l.shop?.id === 61);
                   if (steamLow?.price) {
                     historicalLow = Number(steamLow.price.amount);
+                    historicalLowCurrency = steamLow.price.currency || 'USD';
                     historicalLowDate = steamLow.timestamp || 'Unknown date';
                   }
                 }
@@ -401,6 +403,7 @@ app.get('/api/steam/dashboard', async (req, res) => {
           priceCurrency,
           historicalLow,
           historicalLowDate,
+          historicalLowCurrency,
           positiveReviews: reviews.positive,
           negativeReviews: reviews.negative,
           steamRating: reviews.rating,
@@ -598,6 +601,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
     // Fetch historical low from IsThereAnyDeal
     let historicalLow = 0;
     let historicalLowDate = 'Unavailable from Steam API';
+    let historicalLowCurrency = 'USD';
     try {
       const itdaKey = readSecret('ITDA_API_KEY');
       if (itdaKey) {
@@ -625,7 +629,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
         if (itadUuid) {
           for (let attempt = 0; attempt < 3; attempt++) {
             try {
-              const slRes = await fetch('https://api.isthereanydeal.com/games/storelow/v2', {
+              const slRes = await fetch(`https://api.isthereanydeal.com/games/storelow/v2?country=${cc}`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -639,6 +643,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
                 const steamLow = slData?.[0]?.lows?.find((l: any) => l.shop?.id === 61);
                 if (steamLow?.price) {
                   historicalLow = Number(steamLow.price.amount);
+                  historicalLowCurrency = steamLow.price.currency || 'USD';
                   historicalLowDate = steamLow.timestamp || 'Unknown date';
                   break;
                 }
@@ -691,6 +696,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       priceCurrency,
       historicalLow,
       historicalLowDate,
+      historicalLowCurrency,
       positiveReviews: reviews.positive,
       negativeReviews: reviews.negative,
       steamRating: reviews.rating,
