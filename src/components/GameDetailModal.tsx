@@ -345,7 +345,6 @@ export const GameDetailModal = ({
                     <span className="text-amber-400 font-mono font-bold">
                       {game.historicalLow > 0 ? formatPrice(game.historicalLow, game.priceCurrency) : 'N/A'}
                     </span>
-                    <span className="text-[9px] text-slate-600 block mt-0.5">Steam API unavailable</span>
                   </div>
                 </div>
               </div>
