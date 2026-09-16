@@ -70,7 +70,68 @@ export interface SteamGame {
   };
 }
 
-export type ActiveTab = 'charts' | 'sales' | 'proton' | 'releases';
+export type ActiveTab = 'charts' | 'leaderboards' | 'sales' | 'calculator' | 'patches' | 'proton' | 'releases';
+
+export interface LeaderboardItem {
+  id: number;
+  steamId: number;
+  position: number;
+  name: string;
+  logo: string;
+  followers?: number;
+  currentPlayers?: number;
+  peak24h?: number;
+  price?: number;
+  discountPercent?: number;
+  currency?: string;
+}
+
+export interface SteamPatchNote {
+  gid: string;
+  title: string;
+  url: string;
+  author: string;
+  contents: string;
+  feedlabel: string;
+  date: number; // unix timestamp
+  appid: number;
+  gameName?: string;
+  tags?: string[];
+}
+
+export interface CalculatorGame {
+  appid: number;
+  name: string;
+  playtimeHours: number;
+  playtime2WeeksHours?: number;
+  priceUSD: number;
+  lowestPriceUSD: number;
+  pricePerHourUSD: number;
+  headerImage: string;
+}
+
+export interface CalculatorProfile {
+  steamId64: string;
+  vanityId: string;
+  personaname: string;
+  realname?: string;
+  avatarUrl: string;
+  memberSince?: string;
+  accountAgeYears?: number;
+  location?: string;
+  privacyState: 'public' | 'friendsonly' | 'private';
+  vacBanned: boolean;
+  tradeBanState: string;
+  totalGames: number;
+  unplayedGamesCount: number;
+  unplayedPercent: number;
+  totalHoursPlayed: number;
+  totalAccountValueUSD: number;
+  totalLowestValueUSD: number;
+  averagePricePerHourUSD: number;
+  topGames: CalculatorGame[];
+  allGames: CalculatorGame[];
+}
 
 export type ConcurrentTimeframe = 'day' | 'week' | 'month' | 'year' | 'all_time';
 

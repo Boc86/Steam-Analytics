@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
+  BarChart2, 
   Flame, 
   Tag, 
   Terminal, 
@@ -9,7 +10,10 @@ import {
   Activity, 
   Radio,
   Loader2,
-  DollarSign
+  DollarSign,
+  Trophy,
+  Calculator,
+  FileText
 } from 'lucide-react';
 import { ActiveTab, Currency, SteamGame } from '../types';
 import { formatNumber, formatPrice, CURRENCY_SYMBOLS } from '../utils/formatters';
@@ -438,11 +442,11 @@ export const Header = ({
       </div>
 
       {/* Navigation Tabs Bar with Bento Active Border indicator */}
-      <div className="max-w-7xl mx-auto px-4 overflow-x-auto scrollbar-none flex items-center gap-6 border-t border-slate-800">
+      <div className="max-w-7xl mx-auto px-4 overflow-x-auto scrollbar-none flex items-center gap-6 border-t border-slate-800 shrink-0">
         <button
           id="tab-charts"
           onClick={() => setActiveTab('charts')}
-          className={`flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
+          className={`shrink-0 flex-shrink-0 flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
             activeTab === 'charts'
               ? 'text-white border-blue-500'
               : 'text-slate-400 border-transparent hover:text-slate-200'
@@ -453,9 +457,22 @@ export const Header = ({
         </button>
 
         <button
+          id="tab-leaderboards"
+          onClick={() => setActiveTab('leaderboards')}
+          className={`shrink-0 flex-shrink-0 flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
+            activeTab === 'leaderboards'
+              ? 'text-white border-blue-500'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          <Trophy className="w-3.5 h-3.5 text-yellow-400" />
+          <span>Leaderboards</span>
+        </button>
+
+        <button
           id="tab-sales"
           onClick={() => setActiveTab('sales')}
-          className={`flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
+          className={`shrink-0 flex-shrink-0 flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
             activeTab === 'sales'
               ? 'text-white border-blue-500'
               : 'text-slate-400 border-transparent hover:text-slate-200'
@@ -466,9 +483,37 @@ export const Header = ({
         </button>
 
         <button
+          id="tab-calculator"
+          onClick={() => setActiveTab('calculator')}
+          className={`shrink-0 flex-shrink-0 flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
+            activeTab === 'calculator'
+              ? 'text-white border-blue-500'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          <Calculator className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Calculator</span>
+          <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">VALUATION</span>
+        </button>
+
+        <button
+          id="tab-patches"
+          onClick={() => setActiveTab('patches')}
+          className={`shrink-0 flex-shrink-0 flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
+            activeTab === 'patches'
+              ? 'text-white border-blue-500'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Patches</span>
+          <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">LIVE</span>
+        </button>
+
+        <button
           id="tab-proton"
           onClick={() => setActiveTab('proton')}
-          className={`flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
+          className={`shrink-0 flex-shrink-0 flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
             activeTab === 'proton'
               ? 'text-white border-blue-500'
               : 'text-slate-400 border-transparent hover:text-slate-200'
@@ -482,13 +527,13 @@ export const Header = ({
         <button
           id="tab-releases"
           onClick={() => setActiveTab('releases')}
-          className={`flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
+          className={`shrink-0 flex-shrink-0 flex items-center gap-2 py-3.5 text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap border-b-2 ${
             activeTab === 'releases'
               ? 'text-white border-blue-500'
               : 'text-slate-400 border-transparent hover:text-slate-200'
           }`}
         >
-          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+          <Calendar className="w-3.5 h-3.5 text-amber-400" />
           <span>Releases</span>
         </button>
       </div>

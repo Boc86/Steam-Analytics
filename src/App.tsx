@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { ActiveTab, Currency, SteamGame } from './types';
 import { Header } from './components/Header';
 import { ChartsView } from './components/ChartsView';
+import { LeaderboardsView } from './components/LeaderboardsView';
 import { SalesView } from './components/SalesView';
 import { ProtonDBHub } from './components/ProtonDBHub';
 import { ReleasesView } from './components/ReleasesView';
+import { CalculatorView } from './components/CalculatorView';
+import { PatchesView } from './components/PatchesView';
 import { GameDetailModal } from './components/GameDetailModal';
 import { Footer } from './components/Footer';
 
@@ -98,6 +101,10 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+        {activeTab === 'leaderboards' && (
+          <LeaderboardsView onSelectGameById={handleSelectGameById} />
+        )}
+
         {activeTab === 'charts' && (
           <ChartsView
             games={games}
@@ -111,6 +118,19 @@ export default function App() {
             games={games}
             currency={currency}
             onSelectGame={(game) => handleSelectGameById(game.id)}
+          />
+        )}
+
+        {activeTab === 'calculator' && (
+          <CalculatorView
+            currency={currency}
+            onSelectGameById={handleSelectGameById}
+          />
+        )}
+
+        {activeTab === 'patches' && (
+          <PatchesView
+            onSelectGameById={handleSelectGameById}
           />
         )}
 

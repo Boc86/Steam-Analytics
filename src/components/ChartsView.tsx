@@ -22,6 +22,7 @@ import {
   Tooltip, 
   CartesianGrid 
 } from 'recharts';
+import { List, Grid } from 'lucide-react';
 import { Currency, SteamGame, ConcurrentTimeframe } from '../types';
 import { 
   formatNumber, 
@@ -49,6 +50,7 @@ export const ChartsView = ({
   const [sortField, setSortField] = useState<SortField>('currentPlayers');
   const [sortAsc, setSortAsc] = useState(false);
   const [discountOnly, setDiscountOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<'bento' | 'dense'>('bento');
   const [concurrentTimeframe, setConcurrentTimeframe] = useState<ConcurrentTimeframe>('day');
   const [concurrentData, setConcurrentData] = useState<{
     currentCount: number;
@@ -138,8 +140,31 @@ export const ChartsView = ({
 
   return (
     <div className="space-y-6">
+
+      {/* Top Bar with View Mode Toggle */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <Activity className="w-5 h-5 text-blue-500" />
+          Trending Database
+        </h2>
+        <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg overflow-hidden p-1">
+          <button 
+            onClick={() => setViewMode('bento')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'bento' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Bento View
+          </button>
+          <button 
+            onClick={() => setViewMode('dense')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'dense' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Dense List
+          </button>
+        </div>
+      </div>
+
       {/* Bento Grid Showcase - Top Hero & Key Metric Tiles */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      {viewMode === 'bento' && (<div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Spotlight Bento Card (col-span-3, 2 rows height) */}
         {topGame && (
           <div 
@@ -455,6 +480,8 @@ export const ChartsView = ({
           </div>
         </div>
       </div>
+
+      )} {/* End Bento Grid */}
 
       {/* Filter and Control Bar - Bento Style */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-lg">
