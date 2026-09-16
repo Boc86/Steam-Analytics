@@ -62,15 +62,17 @@ export const Header = ({
   // Fetch Steam-recognized currencies on mount
   useEffect(() => {
     if (availableCurrencies.length > 0) return;
+    let isMounted = true;
     fetch('/api/steam/currencies')
       .then((r) => r.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.currencies)) {
+        if (data.success && Array.isArray(data.currencies) && isMounted) {
           setAvailableCurrencies(data.currencies);
         }
       })
       .catch(() => {});
-  }, []);
+    return () => { isMounted = false; };
+  }, [availableCurrencies.length]);
 
   // Fetch real-time Steam global network stats (Online users & Playing Now)
   useEffect(() => {
@@ -137,7 +139,7 @@ export const Header = ({
     }, 280);
 
     return () => clearTimeout(handler);
-  }, [searchQuery]);
+  }, [searchQuery, currency]);
 
   // Click outside to close search dropdown
   useEffect(() => {

@@ -38,6 +38,27 @@ export const Footer = () => {
             </p>
           </div>
 
+          {/* Games-Popularity Acknowledgment */}
+          <div className="space-y-3 bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
+            <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
+              <Terminal className="w-4 h-4 text-blue-400" />
+              <span>Games-Popularity</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Historical player counts, concurrent peaks, and tracking metrics are powered by{' '}
+              <a
+                href="https://games-popularity.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 font-semibold underline underline-offset-4 hover:text-blue-300 inline-flex items-center gap-1"
+              >
+                Games Popularity (games-popularity.com)
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              . Special gratitude to this independent, unofficial service providing comprehensive historical data.
+            </p>
+          </div>
+
         </div>
 
         {/* Legal Disclaimer & Tech Stack */}
@@ -54,8 +75,8 @@ export const Footer = () => {
               ProtonDB.com
             </a>
             <span>•</span>
-            <a href="https://steamdb.info" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">
-              SteamDB.info
+            <a href="https://games-popularity.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">
+              Games-Popularity.com
             </a>
           </div>
         </div>

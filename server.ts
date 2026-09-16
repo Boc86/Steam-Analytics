@@ -19,7 +19,7 @@ function readSecret(name: string): string | undefined {
 }
 
 export const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 
 app.use(express.json());
 
@@ -177,51 +177,59 @@ async function fetchSteamChartsData(appId: number, currentPlayers: number) {
     playerHistory24h: [],
     playerHistory7d: [],
   };
-  try {
-    const response = await fetch(`https://steamcharts.com/app/${appId}`, { headers: { 'User-Agent': 'Steam Analytics/1.0' } });
-    if (!response.ok) return result;
-    const html = await response.text();
-    const pageText = html
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/\s+/g, ' ');
-    const peakMatch = pageText.match(/([\d,]+)\s*all-time peak/i);
-    if (peakMatch) result.allTimePeak = Number(peakMatch[1].replace(/,/g, ''));
-    const dateMatch = pageText.match(/all-time peak\s+([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})/i);
-    if (dateMatch) result.allTimePeakDate = dateMatch[1];
 
-    const points: { timestamp: number; players: number }[] = [];
-    for (const match of html.matchAll(/\[\s*(\d{10,13})\s*,\s*([\d,]+)\s*\]/g)) {
-      const rawTimestamp = Number(match[1]);
-      points.push({
-        timestamp: rawTimestamp > 100000000000 ? Math.floor(rawTimestamp / 1000) : rawTimestamp,
-        players: Number(match[2].replace(/,/g, '')),
-      });
-      if (points.length > 1000) break;
+  try {
+    // 1. Fetch All-Time Peak from Steamcharts (since Games-Popularity doesn't provide all-time peak directly)
+    try {
+      const response = await fetch(`https://steamcharts.com/app/${appId}`, { headers: { 'User-Agent': 'Steam Analytics/1.0' } });
+      if (response.ok) {
+        const html = await response.text();
+        const pageText = html
+          .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+          .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/\s+/g, ' ');
+        const peakMatch = pageText.match(/([\d,]+)\s*all-time peak/i);
+        if (peakMatch) result.allTimePeak = Number(peakMatch[1].replace(/,/g, ''));
+        const dateMatch = pageText.match(/all-time peak\s+([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})/i);
+        if (dateMatch) result.allTimePeakDate = dateMatch[1];
+      }
+    } catch {}
+
+    // 2. Fetch Historical Charts from Games-Popularity API
+    const apiKey = process.env.GAMES_POPULARITY_API_KEY || 'fd36bac7-fb7d-4b1c-86ab-6be618add21f';
+    const gpRes = await fetch(`https://games-popularity.com/swagger/api/game/players/${appId}?apiKey=${apiKey}`);
+    if (gpRes.ok) {
+      const gpData = await gpRes.json();
+      if (gpData && Array.isArray(gpData.history)) {
+        // The API returns history descending by time (newest first). We need ascending (oldest first).
+        const sortedHistory = gpData.history
+          .map((h: any) => ({
+            timestamp: new Date(h.added).getTime(),
+            players: h.players,
+          }))
+          .sort((a: any, b: any) => a.timestamp - b.timestamp);
+          
+        if (sortedHistory.length > 0) {
+          // 24h history (last 24 hourly points)
+          result.playerHistory24h = sortedHistory.slice(-24).map((point: any) => ({
+            time: new Date(point.timestamp).toISOString().slice(11, 16),
+            players: point.players
+          }));
+
+          // 7d history (last 168 hourly points mapped to date strings)
+          result.playerHistory7d = sortedHistory.slice(-168).map((point: any) => ({
+            time: new Date(point.timestamp).toISOString().slice(0, 10),
+            players: point.players
+          }));
+        }
+      }
     }
-    const uniquePoints = Array.from(new Map(points.map(point => [point.timestamp, point])).values()).sort((a, b) => a.timestamp - b.timestamp);
-    const recent = uniquePoints.slice(-Math.min(uniquePoints.length, 336));
-    result.playerHistory24h = recent.slice(-24).map(point => ({ time: new Date(point.timestamp * 1000).toISOString().slice(11, 16), players: point.players }));
-    result.playerHistory7d = recent.slice(-168).map(point => ({ time: new Date(point.timestamp * 1000).toISOString().slice(0, 10), players: point.players }));
-    if (!result.playerHistory24h.length && currentPlayers > 0) {
-      const dayRatios = [0.72, 0.67, 0.63, 0.66, 0.76, 0.88, 0.98, 1.06, 1.14, 1.18, 1.1, 1.04, 1];
-      result.playerHistory24h = dayRatios.map((ratio, index) => ({
-        time: `${String(index * 2).padStart(2, '0')}:00`,
-        players: Math.round(currentPlayers * ratio),
-      }));
-      const today = new Date();
-      result.playerHistory7d = [0.92, 0.94, 0.96, 0.98, 1.08, 1.2, 1.15].map((ratio, index) => {
-        const date = new Date(today);
-        date.setUTCDate(today.getUTCDate() - (6 - index));
-        return {
-        time: date.toISOString().slice(0, 10),
-        players: Math.round(currentPlayers * ratio),
-        };
-      });
-    }
-  } catch {}
+  } catch (err) {
+    console.warn(`Failed to fetch history for ${appId}:`, err);
+  }
+  
   return result;
 }
 
@@ -394,8 +402,8 @@ app.get('/api/steam/dashboard', async (req, res) => {
           name: d.name,
           headerImage: d.header_image,
           currentPlayers,
-          peak24h: currentPlayers,
-          allTimePeak: steamCharts.allTimePeak,
+          peak24h: Math.max(currentPlayers, ...(steamCharts.playerHistory24h?.map((p: any) => p.players) || [])),
+          allTimePeak: Math.max(steamCharts.allTimePeak, currentPlayers, ...(steamCharts.playerHistory24h?.map((p: any) => p.players) || []), ...(steamCharts.playerHistory7d?.map((p: any) => p.players) || [])),
           allTimePeakDate: steamCharts.allTimePeakDate,
           price,
           originalPrice,
@@ -665,8 +673,8 @@ app.get('/api/steam/game/:appid', async (req, res) => {
     const discountPercent = d.price_overview?.discount_percent || 0;
     const priceCurrency = d.price_overview?.currency || 'USD';
 
-    const peak24h = currentPlayers;
-    const allTimePeak = steamCharts.allTimePeak;
+    const peak24h = Math.max(currentPlayers, ...(steamCharts.playerHistory24h?.map((p: any) => p.players) || []));
+    const allTimePeak = Math.max(steamCharts.allTimePeak, currentPlayers, ...(steamCharts.playerHistory24h?.map((p: any) => p.players) || []), ...(steamCharts.playerHistory7d?.map((p: any) => p.players) || []));
 
     const genres = (d.genres || []).map((g: any) => g.description);
     const categories = (d.categories || []).map((c: any) => c.description);
