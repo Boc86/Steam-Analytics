@@ -15,7 +15,8 @@ import {
   Sparkles,
   TrendingDown,
   Layers,
-  Award
+  Award,
+  Lock
 } from 'lucide-react';
 import { CalculatorProfile, CalculatorGame, Currency } from '../types';
 import { formatNumber, formatPrice } from '../utils/formatters';
@@ -37,10 +38,10 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
   const [sortAsc, setSortAsc] = useState(false);
 
   const presets = [
-    { label: 'Gabe Newell (Valve)', id: 'gabelogannewell' },
-    { label: 'Robin Walker (Valve)', id: 'robinwalker' },
-    { label: 'Pro Gamer', id: '76561198000000001' },
-    { label: 'Indie Enthusiast', id: 'indiegamer' }
+    { label: 'Gabe Newell', tag: 'Valve CEO', id: 'gabelogannewell' },
+    { label: 'Robin Walker', tag: 'TF2 / Alyx Lead', id: 'robinwalker' },
+    { label: 'Pro Gamer', tag: 'FPS Grinder', id: '76561198000000001' },
+    { label: 'Indie Enthusiast', tag: 'Roguelikes', id: 'indiegamer' }
   ];
 
   const fetchProfile = (userId: string) => {
@@ -104,7 +105,7 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
               Steam Calculator
             </h1>
             <p className="text-sm text-slate-400 max-w-xl">
-              Calculate your total account value, playtime investments, cost-per-hour efficiency, and unplayed backlog (pile of shame).
+              Calculate dynamic account values, playtime investments, cost-per-hour efficiency, and unplayed backlog per profile.
             </p>
           </div>
 
@@ -118,13 +119,16 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
                   setUserInput(p.id);
                   setActiveUser(p.id);
                 }}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all ${
+                className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all flex items-center gap-1.5 ${
                   activeUser === p.id 
-                    ? 'bg-blue-600 text-white border-blue-500 shadow-md' 
-                    : 'bg-slate-900/80 text-slate-300 border-slate-700/80 hover:bg-slate-800'
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30 ring-2 ring-blue-400/40' 
+                    : 'bg-slate-900/80 text-slate-300 border-slate-700/80 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                {p.label}
+                <span>{p.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${activeUser === p.id ? 'bg-blue-700 text-blue-100' : 'bg-slate-800 text-slate-400'}`}>
+                  {p.tag}
+                </span>
               </button>
             ))}
           </div>
@@ -210,6 +214,43 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
                   )}
                 </div>
 
+                {/* Level, Badges, and Badges Bar */}
+                <div className="flex items-center gap-2 flex-wrap mt-2">
+                  {profile.steamLevel !== undefined && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-mono font-bold flex items-center gap-1">
+                      <Award className="w-3.5 h-3.5 text-blue-400" />
+                      Level {profile.steamLevel}
+                    </span>
+                  )}
+                  {profile.badgesCount !== undefined && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-medium">
+                      {profile.badgesCount} Badges
+                    </span>
+                  )}
+                  {profile.yearsOfService !== undefined && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-xs font-medium">
+                      {profile.yearsOfService} Years of Service
+                    </span>
+                  )}
+                  {profile.gamesPublic ? (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-medium flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      Public Library
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-amber-400" />
+                      Game Details Private
+                    </span>
+                  )}
+                </div>
+
+                {profile.summaryBio && (
+                  <p className="text-xs text-slate-300 mt-2 max-w-2xl bg-slate-950/40 p-2 rounded-xl border border-slate-800/80 leading-relaxed font-sans">
+                    {profile.summaryBio}
+                  </p>
+                )}
+
                 <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 flex-wrap">
                   <div className="flex items-center gap-1.5 font-mono">
                     <span>ID64: {profile.steamId64}</span>
@@ -244,6 +285,54 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
             </div>
           </div>
 
+          {/* Privacy Notice Banner when Game Details are not public */}
+          {!profile.gamesPublic && (
+            <div className="bg-amber-950/25 border border-amber-500/30 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center flex-shrink-0 text-amber-400 mt-0.5">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-bold text-amber-200">Steam Game Details Are Private</h3>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold uppercase tracking-wider">
+                        Accurate Data Enforced
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
+                      Your Steam profile is visible, but Steam strictly separates <strong className="text-white">Profile Privacy</strong> from <strong className="text-white">Game Details Privacy</strong>. Valve sets Game Details to <em>Friends Only</em> or <em>Private</em> by default. To guarantee accuracy without estimates, library valuations and backlog metrics are withheld until Game Details are set to Public.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
+                      <span className="text-amber-400/90 font-medium">To value your complete {profile.totalGames} game library:</span>
+                      <div className="flex items-center gap-1.5 text-slate-300">
+                        <span className="w-4 h-4 rounded-full bg-slate-800 text-[10px] font-mono flex items-center justify-center text-slate-300 font-bold border border-slate-700">1</span>
+                        <span>Open Steam Privacy Settings</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-300">
+                        <span className="w-4 h-4 rounded-full bg-slate-800 text-[10px] font-mono flex items-center justify-center text-slate-300 font-bold border border-slate-700">2</span>
+                        <span>Set <strong>Game details</strong> to <strong>Public</strong></span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-300">
+                        <span className="w-4 h-4 rounded-full bg-slate-800 text-[10px] font-mono flex items-center justify-center text-slate-300 font-bold border border-slate-700">3</span>
+                        <span>Uncheck <em>&quot;Keep total playtime private&quot;</em></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href="https://steamcommunity.com/my/edit/settings"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="self-start md:self-center px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
+                >
+                  <span>Steam Privacy Settings</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Key Metrics Bento Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Card 1: Total Account Value */}
@@ -253,16 +342,30 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
                 <span>Account Value (Store)</span>
                 <DollarSign className="w-4 h-4 text-blue-400" />
               </div>
-              <div className="text-3xl font-black text-white font-mono">
-                {formatPrice(profile.totalAccountValueUSD, currency)}
-              </div>
-              <div className="mt-2 text-xs text-slate-400 flex items-center gap-1.5 font-mono">
-                <TrendingDown className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Lowest historical: </span>
-                <span className="font-bold text-emerald-400">
-                  {formatPrice(profile.totalLowestValueUSD, currency)}
-                </span>
-              </div>
+              {profile.totalAccountValueUSD !== null ? (
+                <>
+                  <div className="text-3xl font-black text-white font-mono">
+                    {formatPrice(profile.totalAccountValueUSD, currency)}
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400 flex items-center gap-1.5 font-mono">
+                    <TrendingDown className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Lowest historical: </span>
+                    <span className="font-bold text-emerald-400">
+                      {formatPrice(profile.totalLowestValueUSD || 0, currency)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-xl font-bold text-slate-300 flex items-center gap-2 font-mono py-1">
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    <span>Private on Steam</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    Requires public Game Details on Steam
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Card 2: Total Playtime */}
@@ -272,12 +375,25 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
                 <span>Total Playtime</span>
                 <Clock className="w-4 h-4 text-purple-400" />
               </div>
-              <div className="text-3xl font-black text-white font-mono">
-                {formatNumber(Math.round(profile.totalHoursPlayed))} <span className="text-base text-slate-400 font-sans font-normal">hours</span>
-              </div>
-              <div className="mt-2 text-xs text-slate-400 font-mono">
-                ≈ {(profile.totalHoursPlayed / 24).toFixed(1)} consecutive days played
-              </div>
+              {profile.totalHoursPlayed !== null ? (
+                <>
+                  <div className="text-3xl font-black text-white font-mono">
+                    {formatNumber(Math.round(profile.totalHoursPlayed))} <span className="text-base text-slate-400 font-sans font-normal">hours</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400 font-mono">
+                    ≈ {(profile.totalHoursPlayed / 24).toFixed(1)} consecutive days played
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-3xl font-black text-white font-mono">
+                    {formatNumber(profile.verifiedHoursPlayed)} <span className="text-base text-slate-400 font-sans font-normal">hours</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400 font-mono">
+                    {profile.verifiedVisibleGamesCount} of {profile.totalGames} games publicly recorded
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Card 3: Price Per Hour */}
@@ -287,12 +403,25 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
                 <span>Price / Hour</span>
                 <Sparkles className="w-4 h-4 text-emerald-400" />
               </div>
-              <div className="text-3xl font-black text-emerald-400 font-mono">
-                ${profile.averagePricePerHourUSD} <span className="text-base text-slate-400 font-sans font-normal">/ hr</span>
-              </div>
-              <div className="mt-2 text-xs text-slate-400 font-mono">
-                Cost efficiency over {profile.totalGames} games
-              </div>
+              {profile.averagePricePerHourUSD !== null ? (
+                <>
+                  <div className="text-3xl font-black text-emerald-400 font-mono">
+                    ${profile.averagePricePerHourUSD} <span className="text-base text-slate-400 font-sans font-normal">/ hr</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400 font-mono">
+                    Cost efficiency over {profile.totalGames} games
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-xl font-bold text-slate-400 flex items-center gap-2 font-mono py-1">
+                    <span>N/A</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    Requires full library store value
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Card 4: Backlog / Pile of Shame */}
@@ -302,18 +431,32 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
                 <span>Pile of Shame (Backlog)</span>
                 <Ghost className="w-4 h-4 text-amber-400" />
               </div>
-              <div className="text-3xl font-black text-amber-400 font-mono">
-                {profile.unplayedPercent}%
-              </div>
-              <div className="mt-2 text-xs text-slate-400 font-mono">
-                {profile.unplayedGamesCount} of {profile.totalGames} games never opened
-              </div>
-              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
-                <div 
-                  className="bg-amber-400 h-full rounded-full transition-all duration-500" 
-                  style={{ width: `${profile.unplayedPercent}%` }} 
-                />
-              </div>
+              {profile.unplayedPercent !== null ? (
+                <>
+                  <div className="text-3xl font-black text-amber-400 font-mono">
+                    {profile.unplayedPercent}%
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400 font-mono">
+                    {profile.unplayedGamesCount} of {profile.totalGames} games never opened
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+                    <div 
+                      className="bg-amber-400 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${profile.unplayedPercent}%` }} 
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-xl font-bold text-slate-400 flex items-center gap-2 font-mono py-1">
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    <span>Private</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    Backlog hidden on Steam
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -323,10 +466,14 @@ export const CalculatorView = ({ currency, onSelectGameById }: CalculatorViewPro
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Gamepad2 className="w-5 h-5 text-blue-400" />
-                  Library Games Breakdown
+                  {profile.gamesPublic 
+                    ? `Library Games Breakdown (${profile.totalGames} games)` 
+                    : `Verified Public Games (${profile.allGames.length} of ${profile.totalGames} games)`}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Detailed valuations, hours recorded, and historical lowest prices
+                  {profile.gamesPublic 
+                    ? 'Detailed valuations, hours recorded, and historical lowest prices across your full library'
+                    : `Showing ${profile.allGames.length} game${profile.allGames.length === 1 ? '' : 's'} with publicly verified activity on Steam. The remaining ${Math.max(0, profile.totalGames - profile.allGames.length)} games are restricted by Steam Game Details privacy.`}
                 </p>
               </div>
 

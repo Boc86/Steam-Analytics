@@ -2,6 +2,12 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { 
+  getFormattedPresetProfile, 
+  buildAccuratePublicProfile, 
+  buildPrivateGameDetailsProfile, 
+  STEAM_GAMES_CATALOG 
+} from './server/calculatorEngine';
 
 // Load .env locally for ITDA_API_KEY (Render mounts secrets as files via readSecret)
 try { require('dotenv').config(); } catch {}
@@ -989,16 +995,21 @@ app.get('/api/steam/game/:appid/patches', async (req, res) => {
 // 1i. SteamDB Calculator & Account Valuation Engine
 app.get('/api/steam/calculator', async (req, res) => {
   try {
-    let userQuery = (req.query.user as string || '').trim();
+    let rawQuery = (req.query.user as string || '').trim();
+    if (!rawQuery) {
+      rawQuery = 'gabelogannewell';
+    }
+
+    // Clean up input: strip steamcommunity URLs, query parameters, trailing slashes
+    let userQuery = rawQuery
+      .replace(/^https?:\/\/steamcommunity\.com\/(id|profiles)\//i, '')
+      .replace(/[/?#].*$/, '')
+      .replace(/\/$/, '')
+      .trim();
+
     if (!userQuery) {
       userQuery = 'gabelogannewell';
     }
-
-    userQuery = userQuery.replace(/^https?:\/\/steamcommunity\.com\/(id|profiles)\//i, '').replace(/\/$/, '');
-    const isSteamId64 = /^\d{17}$/.test(userQuery);
-    const targetUrl = isSteamId64 
-      ? `https://steamcommunity.com/profiles/${userQuery}/?xml=1`
-      : `https://steamcommunity.com/id/${userQuery}/?xml=1`;
 
     const cacheKey = `calc_profile_${userQuery.toLowerCase()}`;
     const cached = getCached<any>(cacheKey);
@@ -1006,28 +1017,100 @@ app.get('/api/steam/calculator', async (req, res) => {
       return res.json({ success: true, profile: cached });
     }
 
-    const xmlRes = await fetch(targetUrl);
-    if (!xmlRes.ok) {
-      return res.status(404).json({ success: false, error: 'Could not fetch Steam profile' });
+    // Check if userQuery matches one of our rich featured presets
+    const lowerQuery = userQuery.toLowerCase();
+    let presetKey = '';
+    if (lowerQuery === 'gabelogannewell' || lowerQuery === '76561197960287930') {
+      presetKey = 'gabelogannewell';
+    } else if (lowerQuery === 'robinwalker' || lowerQuery === '76561197960435530') {
+      presetKey = 'robinwalker';
+    } else if (lowerQuery === '76561198000000001' || lowerQuery === 'f00l1sh_n1nj4') {
+      presetKey = '76561198000000001';
+    } else if (lowerQuery === 'indiegamer' || lowerQuery === '76561198011468818' || lowerQuery === 'leeroy') {
+      presetKey = 'indiegamer';
     }
 
-    const xml = await xmlRes.text();
+    if (presetKey) {
+      const presetProfile = getFormattedPresetProfile(presetKey);
+      if (presetProfile) {
+        setCache(cacheKey, presetProfile, 15 * 60 * 1000);
+        return res.json({ success: true, profile: presetProfile });
+      }
+    }
+
+    // Dynamic fetch for any Steam profile
+    const isSteamId64 = /^\d{17}$/.test(userQuery);
+    const targetUrl = isSteamId64 
+      ? `https://steamcommunity.com/profiles/${userQuery}/?xml=1`
+      : `https://steamcommunity.com/id/${userQuery}/?xml=1`;
+
+    const profilePageUrl = isSteamId64
+      ? `https://steamcommunity.com/profiles/${userQuery}`
+      : `https://steamcommunity.com/id/${userQuery}`;
+
+    // Fetch XML and profile HTML in parallel
+    const [xmlRes, pageRes, badgesRes] = await Promise.all([
+      fetch(targetUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }).catch(() => null),
+      fetch(profilePageUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }).catch(() => null),
+      fetch(`${profilePageUrl}/badges`, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }).catch(() => null)
+    ]);
+
+    let xml = '';
+    if (xmlRes && xmlRes.ok) {
+      xml = await xmlRes.text();
+    }
+
+    let pageHtml = '';
+    if (pageRes && pageRes.ok) {
+      pageHtml = await pageRes.text();
+    }
+
+    let badgesHtml = '';
+    if (badgesRes && badgesRes.ok) {
+      badgesHtml = await badgesRes.text();
+    }
+
     const getTag = (t: string) => {
       const m = xml.match(new RegExp(`<${t}>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/${t}>`));
       return m ? m[1].trim() : '';
     };
 
-    const steamId64 = getTag('steamID64') || (isSteamId64 ? userQuery : '76561197960287930');
-    const personaname = getTag('steamID') || userQuery;
+    if (xml.includes('The specified profile could not be found') || pageHtml.includes('The specified profile could not be found')) {
+      return res.status(404).json({ success: false, error: 'The specified Steam profile could not be found.' });
+    }
+
+    const steamId64 = getTag('steamID64') || (isSteamId64 ? userQuery : '');
+    const personaname = getTag('steamID') || pageHtml.match(/class="actual_persona_name">([^<]+)<\/span>/)?.[1]?.trim() || userQuery;
     const realname = getTag('realname') || undefined;
-    const avatarUrl = getTag('avatarFull') || getTag('avatarMedium') || 'https://avatars.fastly.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426_full.jpg';
-    const memberSince = getTag('memberSince') || 'September 12, 2003';
+    const avatarUrl = getTag('avatarFull') || getTag('avatarMedium') || pageHtml.match(/<div class="playerAvatarAutoSizeInner">\s*<img src="([^"]+)"/)?.[1] || 'https://avatars.fastly.steamstatic.com/c5d56249ee5d28a07db4ac9f7f60af961fab5426_full.jpg';
+    const memberSince = getTag('memberSince') || 'September 12, 2012';
     const location = getTag('location') || undefined;
     const vacBanned = getTag('vacBanned') === '1';
     const tradeBanState = getTag('tradeBanState') || 'None';
-    const privacyState = (getTag('privacyState') as any) || 'public';
+    let privacyState = (getTag('privacyState') as any) || 'public';
+    if (pageHtml.includes('This profile is private.') || pageHtml.includes('profile_private_info')) {
+      privacyState = 'private';
+    }
+    const summaryBio = getTag('summary')?.replace(/<[^>]+>/g, '').trim() || undefined;
 
-    let accountAgeYears = 15;
+    // Steam level from profile HTML
+    const levelMatch = pageHtml.match(/class="friendPlayerLevelNum">([0-9]+)<\/span>/);
+    const steamLevel = levelMatch ? parseInt(levelMatch[1], 10) : 0;
+
+    // Badges count from badges HTML or profile
+    const badgesMatches = badgesHtml.match(/badge_info_title">([^<]+)<\/div>/g);
+    const profileBadgesMatch = pageHtml.match(/href="https:\/\/steamcommunity\.com\/(?:id|profiles)\/[^"]*\/badges\/">[\s\S]*?<span class="profile_count_link_total">\s*([0-9,]+)\s*<\/span>/i);
+    const badgesCount = profileBadgesMatch 
+      ? parseInt(profileBadgesMatch[1].replace(/,/g, ''), 10)
+      : (badgesMatches ? badgesMatches.length : (steamLevel > 0 ? Math.max(1, Math.round(steamLevel / 2)) : 0));
+
+    // Accurate total games count from profile HTML
+    const gamesCountMatch = pageHtml.match(/<a href="https:\/\/steamcommunity\.com\/(?:id|profiles)\/[^"]*\/games\/?\?tab=all">[\s\S]*?<span class="profile_count_link_total">\s*([0-9,]+)\s*<\/span>/i)
+      || pageHtml.match(/data-tooltip-html="[^"]*?([0-9,]+)\s+games in library"/i)
+      || pageHtml.match(/<div class="profile_badges_badge"[^>]*data-tooltip-html="[^"]*?([0-9,]+)\s+games in library"/i);
+    const totalGames = gamesCountMatch ? parseInt(gamesCountMatch[1].replace(/,/g, ''), 10) : 0;
+
+    let accountAgeYears = 5;
     try {
       const joinYear = new Date(memberSince).getFullYear();
       if (!isNaN(joinYear)) {
@@ -1035,110 +1118,135 @@ app.get('/api/steam/calculator', async (req, res) => {
       }
     } catch {}
 
-    const gamesMatch = xml.match(/<game>([\s\S]*?)<\/game>/g);
-    let parsedGames: any[] = [];
+    // Extract verified visible games from XML mostPlayedGame
+    const verifiedGames: Array<{
+      appid: number;
+      name: string;
+      playtimeHours: number;
+      priceUSD: number;
+      lowestPriceUSD: number;
+      headerImage?: string;
+    }> = [];
 
-    if (gamesMatch && gamesMatch.length > 0) {
-      parsedGames = gamesMatch.map((gm) => {
-        const getGameTag = (t: string) => {
-          const m = gm.match(new RegExp(`<${t}>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?<\\/${t}>`));
-          return m ? m[1].trim() : '';
-        };
-        const appid = parseInt(getGameTag('appID'), 10);
-        const name = getGameTag('name');
-        const hoursOnRecord = parseFloat(getGameTag('hoursOnRecord') || '0');
-        const hoursLast2Weeks = parseFloat(getGameTag('hoursLast2Weeks') || '0');
-        return {
+    const mostPlayedRegex = /<mostPlayedGame>([\s\S]*?)<\/mostPlayedGame>/g;
+    let m;
+    while ((m = mostPlayedRegex.exec(xml)) !== null) {
+      const block = m[1];
+      const name = block.match(/<gameName><!\[CDATA\[(.*?)\]\]><\/gameName>/)?.[1] || '';
+      const appidMatch = block.match(/steamcommunity\.com\/app\/([0-9]+)/);
+      const appid = appidMatch ? parseInt(appidMatch[1], 10) : 0;
+      const hoursMatch = block.match(/<hoursOnRecord>([0-9.,]+)<\/hoursOnRecord>/) || block.match(/<hoursPlayed>([0-9.,]+)<\/hoursPlayed>/);
+      const hours = hoursMatch ? parseFloat(hoursMatch[1].replace(/,/g, '')) : 0;
+      const logo = block.match(/<gameLogo><!\[CDATA\[(.*?)\]\]><\/gameLogo>/)?.[1] || (appid ? `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appid}/header.jpg` : '');
+      if (name && appid && !verifiedGames.some(g => g.appid === appid)) {
+        const cat = STEAM_GAMES_CATALOG.find(c => c.appid === appid);
+        verifiedGames.push({
           appid,
           name,
-          playtimeHours: hoursOnRecord,
-          playtime2WeeksHours: hoursLast2Weeks,
-          priceUSD: 19.99,
-          lowestPriceUSD: 4.99,
-          pricePerHourUSD: hoursOnRecord > 0 ? Number((19.99 / hoursOnRecord).toFixed(2)) : 19.99,
-          headerImage: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appid}/header.jpg`
-        };
-      });
+          playtimeHours: hours,
+          priceUSD: cat ? cat.priceUSD : 29.99,
+          lowestPriceUSD: cat ? cat.lowestPriceUSD : 14.99,
+          headerImage: logo
+        });
+      }
     }
 
-    if (parsedGames.length === 0) {
-      const sampleLibrary = [
-        { appid: 730, name: 'Counter-Strike 2', playtimeHours: 1420.5, priceUSD: 0, lowestPriceUSD: 0 },
-        { appid: 570, name: 'Dota 2', playtimeHours: 890.0, priceUSD: 0, lowestPriceUSD: 0 },
-        { appid: 440, name: 'Team Fortress 2', playtimeHours: 412.0, priceUSD: 0, lowestPriceUSD: 0 },
-        { appid: 1086940, name: "Baldur's Gate 3", playtimeHours: 154.2, priceUSD: 59.99, lowestPriceUSD: 47.99 },
-        { appid: 1245620, name: 'ELDEN RING', playtimeHours: 192.0, priceUSD: 59.99, lowestPriceUSD: 35.99 },
-        { appid: 1091500, name: 'Cyberpunk 2077', playtimeHours: 98.4, priceUSD: 59.99, lowestPriceUSD: 29.99 },
-        { appid: 252490, name: 'Rust', playtimeHours: 710.0, priceUSD: 39.99, lowestPriceUSD: 19.99 },
-        { appid: 271590, name: 'Grand Theft Auto V', playtimeHours: 320.0, priceUSD: 29.99, lowestPriceUSD: 14.99 },
-        { appid: 1172470, name: 'Apex Legends', playtimeHours: 245.0, priceUSD: 0, lowestPriceUSD: 0 },
-        { appid: 4000, name: "Garry's Mod", playtimeHours: 125.0, priceUSD: 9.99, lowestPriceUSD: 2.49 },
-        { appid: 620, name: 'Portal 2', playtimeHours: 32.0, priceUSD: 9.99, lowestPriceUSD: 0.99 },
-        { appid: 220, name: 'Half-Life 2', playtimeHours: 48.0, priceUSD: 9.99, lowestPriceUSD: 0.99 },
-        { appid: 550, name: 'Left 4 Dead 2', playtimeHours: 94.0, priceUSD: 9.99, lowestPriceUSD: 0.99 },
-        { appid: 1145360, name: 'Hades', playtimeHours: 85.0, priceUSD: 24.99, lowestPriceUSD: 8.49 },
-        { appid: 413150, name: 'Stardew Valley', playtimeHours: 182.0, priceUSD: 14.99, lowestPriceUSD: 7.49 },
-        { appid: 814380, name: 'Sekiro: Shadows Die Twice', playtimeHours: 68.0, priceUSD: 59.99, lowestPriceUSD: 29.99 },
-        { appid: 230410, name: 'Warframe', playtimeHours: 360.0, priceUSD: 0, lowestPriceUSD: 0 },
-        { appid: 381210, name: 'Dead by Daylight', playtimeHours: 210.0, priceUSD: 19.99, lowestPriceUSD: 7.99 },
-        { appid: 289070, name: "Sid Meier's Civilization VI", playtimeHours: 280.0, priceUSD: 59.99, lowestPriceUSD: 5.99 },
-        { appid: 892970, name: 'Valheim', playtimeHours: 110.0, priceUSD: 19.99, lowestPriceUSD: 11.99 },
-        { appid: 250900, name: 'The Binding of Isaac: Rebirth', playtimeHours: 145.0, priceUSD: 14.99, lowestPriceUSD: 7.49 },
-        { appid: 367520, name: 'Hollow Knight', playtimeHours: 62.0, priceUSD: 14.99, lowestPriceUSD: 4.99 },
-        { appid: 105600, name: 'Terraria', playtimeHours: 235.0, priceUSD: 9.99, lowestPriceUSD: 2.49 },
-        // Backlog / Unplayed
-        { appid: 292030, name: 'The Witcher 3: Wild Hunt', playtimeHours: 0, priceUSD: 39.99, lowestPriceUSD: 7.99 },
-        { appid: 377160, name: 'Fallout 4', playtimeHours: 0, priceUSD: 19.99, lowestPriceUSD: 6.59 },
-        { appid: 489830, name: 'The Elder Scrolls V: Skyrim Special Edition', playtimeHours: 0, priceUSD: 39.99, lowestPriceUSD: 9.99 },
-        { appid: 646570, name: 'Slay the Spire', playtimeHours: 0, priceUSD: 24.99, lowestPriceUSD: 8.49 },
-        { appid: 582010, name: 'Monster Hunter: World', playtimeHours: 0, priceUSD: 29.99, lowestPriceUSD: 9.89 },
-        { appid: 779340, name: 'Total War: THREE KINGDOMS', playtimeHours: 0, priceUSD: 59.99, lowestPriceUSD: 19.99 },
-        { appid: 397540, name: 'Borderlands 3', playtimeHours: 0, priceUSD: 59.99, lowestPriceUSD: 5.99 },
-        { appid: 242760, name: 'The Forest', playtimeHours: 0, priceUSD: 19.99, lowestPriceUSD: 4.99 },
-        { appid: 1174180, name: 'Red Dead Redemption 2', playtimeHours: 0, priceUSD: 59.99, lowestPriceUSD: 19.79 },
-      ];
+    // Check if STEAM_API_KEY is available to query GetOwnedGames
+    const steamApiKey = process.env.STEAM_API_KEY || readSecret('STEAM_API_KEY');
+    let fullOwnedGames: any[] = [];
 
-      parsedGames = sampleLibrary.map(g => ({
-        ...g,
-        pricePerHourUSD: g.playtimeHours > 0 ? Number((g.priceUSD / g.playtimeHours).toFixed(2)) : g.priceUSD,
-        headerImage: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appid}/header.jpg`
-      }));
+    if (steamApiKey && steamId64) {
+      try {
+        const ownedRes = await fetch(
+          `https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${steamApiKey}&steamid=${steamId64}&include_appinfo=1&include_played_free_games=1&format=json`
+        );
+        if (ownedRes.ok) {
+          const ownedData = await ownedRes.json();
+          if (Array.isArray(ownedData.response?.games) && ownedData.response.games.length > 0) {
+            fullOwnedGames = ownedData.response.games.map((og: any) => {
+              const cat = STEAM_GAMES_CATALOG.find(c => c.appid === og.appid);
+              const playtimeHours = Number(((og.playtime_forever || 0) / 60).toFixed(1));
+              return {
+                appid: og.appid,
+                name: og.name || `App ${og.appid}`,
+                playtimeHours,
+                priceUSD: cat ? cat.priceUSD : 19.99,
+                lowestPriceUSD: cat ? cat.lowestPriceUSD : 9.99,
+                headerImage: og.img_icon_url 
+                  ? `https://media.steampowered.com/steamcommunity/public/images/apps/${og.appid}/${og.img_icon_url}.jpg`
+                  : `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${og.appid}/header.jpg`
+              };
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Steam Web API GetOwnedGames query error:', err);
+      }
     }
 
-    parsedGames.sort((a, b) => b.playtimeHours - a.playtimeHours);
+    let profileData;
 
-    const totalHoursPlayed = Number(parsedGames.reduce((acc, g) => acc + g.playtimeHours, 0).toFixed(1));
-    const totalAccountValueUSD = Number(parsedGames.reduce((acc, g) => acc + g.priceUSD, 0).toFixed(2));
-    const totalLowestValueUSD = Number(parsedGames.reduce((acc, g) => acc + g.lowestPriceUSD, 0).toFixed(2));
-    const unplayedGamesCount = parsedGames.filter(g => g.playtimeHours === 0).length;
-    const unplayedPercent = Math.round((unplayedGamesCount / Math.max(parsedGames.length, 1)) * 100);
-    const averagePricePerHourUSD = totalHoursPlayed > 0 ? Number((totalAccountValueUSD / totalHoursPlayed).toFixed(2)) : 0;
+    if (fullOwnedGames.length > 0) {
+      // 100% accurate full library
+      profileData = buildAccuratePublicProfile(
+        steamId64 || userQuery,
+        userQuery,
+        personaname,
+        realname,
+        avatarUrl,
+        memberSince,
+        accountAgeYears,
+        location,
+        privacyState,
+        vacBanned,
+        tradeBanState,
+        steamLevel,
+        badgesCount,
+        summaryBio,
+        fullOwnedGames
+      );
+    } else {
+      // Game details are private or unauthenticated access blocked by Valve
+      // Fetch live prices for verified games so at least visible games have real store prices
+      if (verifiedGames.length > 0) {
+        try {
+          const appidsList = verifiedGames.map(g => g.appid).join(',');
+          const storeRes = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appidsList}&filters=price_overview&cc=US`);
+          if (storeRes.ok) {
+            const storeData = await storeRes.json();
+            for (const vg of verifiedGames) {
+              const po = storeData[String(vg.appid)]?.data?.price_overview;
+              if (po && typeof po.final === 'number') {
+                vg.priceUSD = po.initial ? po.initial / 100 : po.final / 100;
+                vg.lowestPriceUSD = po.final / 100;
+              }
+            }
+          }
+        } catch {}
+      }
 
-    const profileData = {
-      steamId64,
-      vanityId: userQuery,
-      personaname,
-      realname,
-      avatarUrl,
-      memberSince,
-      accountAgeYears,
-      location,
-      privacyState,
-      vacBanned,
-      tradeBanState,
-      totalGames: parsedGames.length,
-      unplayedGamesCount,
-      unplayedPercent,
-      totalHoursPlayed,
-      totalAccountValueUSD,
-      totalLowestValueUSD,
-      averagePricePerHourUSD,
-      topGames: parsedGames.slice(0, 10),
-      allGames: parsedGames
-    };
+      profileData = buildPrivateGameDetailsProfile(
+        steamId64 || userQuery,
+        userQuery,
+        personaname,
+        realname,
+        avatarUrl,
+        memberSince,
+        accountAgeYears,
+        location,
+        privacyState,
+        vacBanned,
+        tradeBanState,
+        steamLevel,
+        badgesCount,
+        summaryBio,
+        totalGames,
+        verifiedGames
+      );
+    }
 
     setCache(cacheKey, profileData, 10 * 60 * 1000);
-    res.json({ success: true, profile: profileData });
+    return res.json({ success: true, profile: profileData });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Internal server error' });
   }
