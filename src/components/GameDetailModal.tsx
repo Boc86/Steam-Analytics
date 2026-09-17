@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import HlsVideo from './HlsVideo';
 import { 
   X, 
   ExternalLink, 
@@ -19,7 +20,7 @@ import {
   User,
   Gamepad2,
   Sparkles,
-  ShieldCheck
+  PlayCircle
 } from 'lucide-react';
 import { 
   ComposedChart, 
@@ -60,6 +61,7 @@ export const GameDetailModal = ({
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [gamePatches, setGamePatches] = useState<any[]>([]);
   const [loadingGamePatches, setLoadingGamePatches] = useState(false);
+  const [playingTrailers, setPlayingTrailers] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (activeTab === 'economy' && regionalPrices.length === 0) {
@@ -140,31 +142,11 @@ export const GameDetailModal = ({
 
   const timeframeData = useMemo(() => {
     let baseList: { label: string; players: number }[] = [];
-    const now = new Date();
 
     if (chartTimeframe === 'day') {
       if (game.playerHistory24h && game.playerHistory24h.length >= 2) {
         // Full rolling 24-hour window
         baseList = game.playerHistory24h.map(p => ({ label: p.time, players: p.players }));
-      } else {
-        // High-fidelity diurnal 24-hour rolling curve anchored on live players and peak
-        const diurnalCurve = [0.75, 0.70, 0.65, 0.62, 0.64, 0.70, 0.78, 0.88, 0.96, 1.04, 1.12, 1.18, 1.22, 1.20, 1.16, 1.12, 1.06, 1.00, 0.94, 0.90, 0.86, 0.82, 0.78, 1.0];
-        const currentUtcHour = now.getUTCHours();
-        const currentMultiplier = diurnalCurve[currentUtcHour % 24] || 1.0;
-        const intervals = [24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 0];
-        baseList = intervals.reverse().map((h) => {
-          const pt = new Date(now.getTime() - h * 3600 * 1000);
-          const hour = pt.getUTCHours();
-          const pointMultiplier = diurnalCurve[hour % 24];
-          const scaled = h === 0 
-            ? game.currentPlayers 
-            : Math.round(game.currentPlayers * (pointMultiplier / currentMultiplier));
-          const localTime = pt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-          return {
-            label: h === 0 ? 'Now' : localTime,
-            players: Math.max(1, scaled)
-          };
-        });
       }
     } else if (chartTimeframe === 'week') {
       if (game.playerHistory7d && game.playerHistory7d.length >= 2) {
@@ -178,71 +160,17 @@ export const GameDetailModal = ({
           } catch {}
           return { label, players: p.players };
         });
-      } else {
-        // Rolling 7-day cyclical activity with weekend peak telemetry
-        baseList = Array.from({ length: 7 }, (_, i) => {
-          const pt = new Date(now.getTime() - (6 - i) * 24 * 3600 * 1000);
-          const dayOfWeek = pt.getDay(); // 0 = Sun, 6 = Sat
-          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-          const dayFactor = isWeekend ? 1.20 : (dayOfWeek === 5 ? 1.08 : 0.94);
-          const scaled = i === 6 ? game.currentPlayers : Math.round(game.currentPlayers * dayFactor);
-          const dayName = pt.toLocaleDateString(undefined, { weekday: 'short' });
-          return {
-            label: dayName,
-            players: Math.max(1, scaled)
-          };
-        });
       }
-    } else if (chartTimeframe === 'month') {
-      // Show current month's weeks
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const weeksInMonth = Math.ceil(new Date(year, month + 1, 0).getDate() / 7);
-      baseList = Array.from({ length: weeksInMonth }, (_, i) => {
-        const weekStart = new Date(year, month, i * 7 + 1);
-        const weekEnd = new Date(year, month, Math.min((i + 1) * 7, new Date(year, month + 1, 0).getDate()));
-        return {
-          label: `${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}–${weekEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
-          players: Math.round(game.currentPlayers * (0.85 + i * 0.03))
-        };
-      });
-    } else if (chartTimeframe === 'year') {
-      // Show last 12 months
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      baseList = Array.from({ length: 12 }, (_, i) => {
-        const monthIndex = (currentMonth - 11 + i) % 12;
-        const year = currentYear - Math.floor((11 - i) / 12);
-        const label = new Date(year, monthIndex).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
-        const ratio = 0.65 + (i / 11) * 0.35;
-        return { label, players: Math.round(game.currentPlayers * ratio) };
-      });
-    } else {
-      // All time - show release year to now
-      const releaseYear = parseInt(game.releaseDate.match(/\b(\d{4})\b/)?.[1] || '2020');
-      const currentYear = now.getFullYear();
-      baseList = [
-        { label: String(releaseYear), players: game.allTimePeak },
-        { label: String(currentYear), players: game.currentPlayers },
-      ];
+    } else if (chartTimeframe === 'month' || chartTimeframe === 'year' || chartTimeframe === 'all_time') {
+      // We don't have real data for these timeframes from steamcharts for this app
+      baseList = [];
     }
 
-    // Compute trend line (linear regression)
     const n = baseList.length;
-    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    let sumY = 0;
     for (let i = 0; i < n; i++) {
-      sumX += i;
       sumY += baseList[i].players;
-      sumXY += i * baseList[i].players;
-      sumX2 += i * i;
     }
-    const slope = n > 1 ? (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX) : 0;
-    const intercept = n > 0 ? (sumY - slope * sumX) / n : 0;
-
-    const dataWithTrend = baseList.map((item, idx) => ({
-      ...item,
-      trend: Math.round(intercept + slope * idx),
-    }));
 
     const peak = baseList.length > 0 
       ? Math.max(...baseList.map(b => b.players)) 
@@ -251,8 +179,10 @@ export const GameDetailModal = ({
       ? Math.round(sumY / n) 
       : game.currentPlayers;
 
-    return { data: dataWithTrend, peak, avg };
+    return { data: baseList, peak, avg };
   }, [game, chartTimeframe]);
+
+  const trailers = game.trailers || [];
 
   const reviewTrendData = useMemo(() => {
     // Use monthlyHistory (30 months of rollups) for month/year/all views
@@ -374,6 +304,7 @@ export const GameDetailModal = ({
         {/* Modal Navigation Tabs (shrink-0 prevents squashing when Overview or Patch Notes are active) */}
         <div className="shrink-0 flex-shrink-0 min-h-[48px] flex items-center gap-1 px-6 bg-slate-950/80 border-b border-slate-800 overflow-x-auto scrollbar-none">
           <button
+            id="modal-tab-overview"
             onClick={() => setActiveTab('overview')}
             className={`shrink-0 flex-shrink-0 px-4 py-3 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border-b-2 flex items-center gap-2 ${
               activeTab === 'overview'
@@ -386,6 +317,7 @@ export const GameDetailModal = ({
           </button>
 
           <button
+            id="modal-tab-economy"
             onClick={() => setActiveTab('economy')}
             className={`shrink-0 flex-shrink-0 px-4 py-3 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border-b-2 flex items-center gap-2 ${
               activeTab === 'economy'
@@ -403,6 +335,7 @@ export const GameDetailModal = ({
           </button>
 
           <button
+            id="modal-tab-patches"
             onClick={() => setActiveTab('patches')}
             className={`shrink-0 flex-shrink-0 px-4 py-3 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border-b-2 flex items-center gap-2 ${
               activeTab === 'patches'
@@ -418,6 +351,7 @@ export const GameDetailModal = ({
           </button>
 
           <button
+            id="modal-tab-specs"
             onClick={() => setActiveTab('specs')}
             className={`shrink-0 flex-shrink-0 px-4 py-3 text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border-b-2 flex items-center gap-2 ${
               activeTab === 'specs'
@@ -625,7 +559,7 @@ export const GameDetailModal = ({
                     }}
                     formatter={(val: number, name: string) => [
                       `${formatNumber(val)} players`, 
-                      name === 'players' ? 'Actual Count' : 'Trend Line'
+                      name === 'players' ? 'Actual Count' : name
                     ]}
                   />
                   <Area 
@@ -637,15 +571,6 @@ export const GameDetailModal = ({
                     fill="url(#playerGradient)" 
                     name="players"
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="trend"
-                    stroke="#f59e0b"
-                    strokeWidth={2}
-                    strokeDasharray="4 4"
-                    dot={false}
-                    name="trend"
-                  />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -655,10 +580,6 @@ export const GameDetailModal = ({
                 <span className="flex items-center gap-1 text-blue-400">
                   <span className="w-2.5 h-1 bg-blue-500 rounded-full inline-block"></span>
                   Player Count
-                </span>
-                <span className="flex items-center gap-1 text-amber-400">
-                  <span className="w-2.5 h-0.5 bg-amber-400 border-b border-dashed border-amber-400 inline-block"></span>
-                  Trend Line
                 </span>
               </div>
               <span>Live Steam Graph Synchronized</span>
@@ -726,7 +647,7 @@ export const GameDetailModal = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 text-xs mb-3">
+                <div className="grid grid-cols-2 gap-2 bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 text-xs mb-3">
                   <div>
                     <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">Confidence</span>
                     <span className="text-slate-200 font-medium">{game.protonDB.confidence}</span>
@@ -735,46 +656,10 @@ export const GameDetailModal = ({
                     <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">Reports</span>
                     <span className="text-blue-400 font-mono font-bold">{formatNumber(game.protonDB.totalReports)}</span>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">Deck Target</span>
-                    <span className="text-emerald-400 font-mono font-bold">{game.protonDB.deckFpsAverage || '60 FPS'}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <span className="text-slate-400 font-medium">Recommended Runner: </span>
-                    <span className="text-blue-300 font-mono font-bold bg-blue-950/60 px-2.5 py-0.5 rounded-full border border-blue-500/30">
-                      {game.protonDB.recommendedProton}
-                    </span>
-                  </div>
-
-                  <p className="text-slate-300 leading-relaxed bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
-                    <strong className="text-slate-400 font-mono">Tweak Notes: </strong>
-                    {game.protonDB.tinkerSteps}
-                  </p>
-
-                  {game.protonDB.launchOptions && (
-                    <div className="space-y-1">
-                      <span className="text-slate-400 text-[11px] font-mono">Launch Options:</span>
-                      <div className="flex items-center justify-between gap-2 bg-slate-900 px-3.5 py-2 rounded-xl border border-slate-800">
-                        <span className="font-mono text-xs text-emerald-300 truncate">
-                          {game.protonDB.launchOptions}
-                        </span>
-                        <button
-                          onClick={handleCopyLaunch}
-                          className="text-slate-400 hover:text-white p-1 rounded transition-colors flex-shrink-0"
-                          title="Copy command"
-                        >
-                          {copiedLaunch ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs">
+              <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs mt-auto">
                 <span className="text-slate-500 font-mono text-[11px]">Crowdsourced via ProtonDB</span>
                 <a
                   href={game.protonDB.url}
@@ -786,6 +671,55 @@ export const GameDetailModal = ({
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
+            </div>
+
+            {/* Game Trailers Section */}
+            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 flex flex-col shadow-md">
+              <div className="flex items-center gap-2 mb-2">
+                <Flame className="w-4 h-4 text-orange-400" />
+                <h3 className="font-bold text-white text-base">Media & Trailers</h3>
+              </div>
+              
+              {trailers.length > 0 ? (
+                <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar" style={{ maxHeight: '240px' }}>
+                  {trailers.map((trailer) => (
+                    <div key={trailer.id} className="rounded-xl overflow-hidden border border-slate-800 bg-slate-900 shadow-md">
+                      <div className="w-full aspect-video bg-black relative flex items-center justify-center group">
+                        {playingTrailers[trailer.id] ? (
+                          <HlsVideo 
+                            src={trailer.videoUrl}
+                            poster={trailer.thumbnail}
+                            autoPlay={true}
+                            controls={true}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <>
+                            <img 
+                              src={trailer.thumbnail} 
+                              alt={trailer.name}
+                              className="w-full h-full object-cover opacity-70 group-hover:opacity-50 transition-opacity cursor-pointer"
+                              onClick={() => setPlayingTrailers(prev => ({ ...prev, [trailer.id]: true }))}
+                            />
+                            <div 
+                              className="absolute inset-0 flex items-center justify-center cursor-pointer pointer-events-none"
+                            >
+                              <PlayCircle className="w-12 h-12 text-white opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all drop-shadow-lg shadow-black" />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className="p-2.5 text-xs font-medium text-slate-300 truncate">
+                        {trailer.name}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full min-h-[120px] text-slate-500 text-xs">
+                  <p>No trailers available</p>
+                </div>
+              )}
             </div>
 
           </div>
@@ -978,7 +912,7 @@ export const GameDetailModal = ({
                   </div>
                   <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
                     <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">Steam Deck</span>
-                    <span className="text-emerald-400 font-medium mt-1 block">{deckBadge.label}</span>
+                    <span className={`${deckBadge.text} font-medium mt-1 block`}>{deckBadge.label}</span>
                   </div>
                   <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
                     <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">Proton Tier</span>

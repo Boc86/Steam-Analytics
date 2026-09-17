@@ -249,7 +249,7 @@ export const LeaderboardsView = ({ onSelectGameById }: LeaderboardsViewProps) =>
                           <div className="flex flex-col items-end">
                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-pink-500/10 text-pink-300 rounded-md font-mono text-xs font-bold border border-pink-500/25">
                               <Heart className="w-3 h-3 text-pink-400 fill-pink-500/20" />
-                              <span>{formatNumber(item.followers || 0)}</span>
+                              <span>{item.followers ? formatNumber(item.followers) : 'Unavailable'}</span>
                               <span className="text-[10px] text-pink-400/70 font-normal">wishlists</span>
                             </div>
                             <span className="text-[10px] text-slate-400 font-mono mt-0.5">

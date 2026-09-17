@@ -131,6 +131,7 @@ export const ProtonDBHub = ({ games, onSelectGame }: ProtonDBHubProps) => {
         <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-2 flex-shrink-0">Filter Tier:</span>
         
         <button
+          id="proton-filter-all"
           onClick={() => setSelectedTier('all')}
           className={`px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
             selectedTier === 'all'
@@ -142,6 +143,7 @@ export const ProtonDBHub = ({ games, onSelectGame }: ProtonDBHubProps) => {
         </button>
 
         <button
+          id="proton-filter-native"
           onClick={() => setSelectedTier('Native')}
           className={`px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
             selectedTier === 'Native'
@@ -153,6 +155,7 @@ export const ProtonDBHub = ({ games, onSelectGame }: ProtonDBHubProps) => {
         </button>
 
         <button
+          id="proton-filter-platinum"
           onClick={() => setSelectedTier('Platinum')}
           className={`px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
             selectedTier === 'Platinum'
@@ -164,6 +167,7 @@ export const ProtonDBHub = ({ games, onSelectGame }: ProtonDBHubProps) => {
         </button>
 
         <button
+          id="proton-filter-gold"
           onClick={() => setSelectedTier('Gold')}
           className={`px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
             selectedTier === 'Gold'
@@ -175,6 +179,7 @@ export const ProtonDBHub = ({ games, onSelectGame }: ProtonDBHubProps) => {
         </button>
 
         <button
+          id="proton-filter-borked"
           onClick={() => setSelectedTier('Borked')}
           className={`px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
             selectedTier === 'Borked'

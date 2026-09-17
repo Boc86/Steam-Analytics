@@ -130,7 +130,7 @@ export function getDeckStatusBadge(status: DeckStatus): { label: string; icon: s
       };
     case 'Unsupported':
       return {
-        label: 'Unsupported',
+        label: 'Deck Unsupported',
         icon: 'ban',
         bg: 'bg-red-950/60',
         text: 'text-red-400',
@@ -139,11 +139,11 @@ export function getDeckStatusBadge(status: DeckStatus): { label: string; icon: s
     case 'Unknown':
     default:
       return {
-        label: 'Untested',
+        label: 'Deck Untested',
         icon: 'help-circle',
-        bg: 'bg-zinc-900',
-        text: 'text-zinc-400',
-        border: 'border-zinc-800',
+        bg: 'bg-slate-900/80',
+        text: 'text-slate-400',
+        border: 'border-slate-800',
       };
   }
 }

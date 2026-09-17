@@ -19,11 +19,14 @@ export interface ProtonDBData {
   tier: ProtonTier;
   confidence: 'Strong' | 'High' | 'Good' | 'Moderate' | 'Unknown';
   totalReports: number;
-  recommendedProton: string;
-  launchOptions?: string;
-  tinkerSteps: string;
-  deckFpsAverage?: string;
   url: string;
+}
+
+export interface SteamTrailer {
+  id: number;
+  name: string;
+  videoUrl: string;
+  thumbnail: string;
 }
 
 export interface SteamGame {
@@ -51,6 +54,7 @@ export interface SteamGame {
   tags: string[];
   deckStatus: DeckStatus;
   protonDB: ProtonDBData;
+  trailers?: SteamTrailer[];
   reviewHistory: { date: string; positive: number; negative: number; rating: number }[];
   monthlyHistory: { date: string; positive: number; negative: number; rating: number }[];
   dailyHistory: { date: string; positive: number; negative: number; rating: number }[];

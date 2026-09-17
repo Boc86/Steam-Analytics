@@ -165,10 +165,6 @@ export const ReleasesView = ({ onSelectGame }: ReleasesViewProps) => {
                     (e.target as HTMLImageElement).src = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.id}/header.jpg`;
                   }}
                 />
-                <div className="absolute top-3 right-3 bg-slate-950/90 backdrop-blur px-3 py-1 rounded-full border border-slate-700/80 flex items-center gap-1.5 text-xs text-blue-300 font-mono font-bold shadow-lg">
-                  <Flame className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Hype: {game.hypeScore}%</span>
-                </div>
                 <div className="absolute bottom-3 left-3 bg-slate-950/90 backdrop-blur px-2.5 py-0.5 rounded-full border border-slate-800 text-[10px] font-mono font-bold text-slate-300">
                   AppID: {game.id}
                 </div>
@@ -214,7 +210,7 @@ export const ReleasesView = ({ onSelectGame }: ReleasesViewProps) => {
                 <div className="text-[10px] text-slate-500 uppercase font-mono font-bold">Community Followers</div>
                 <div className="font-bold text-blue-400 font-mono flex items-center gap-1 justify-end mt-0.5">
                   <Users className="w-3 h-3" />
-                  <span>{formatNumber(game.followers)}</span>
+                  <span>{game.followers > 0 ? formatNumber(game.followers) : 'Unavailable'}</span>
                 </div>
               </div>
             </div>

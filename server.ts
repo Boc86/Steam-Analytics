@@ -160,20 +160,120 @@ function parseMinimumRequirements(requirements: string | undefined) {
   };
 }
 
-async function fetchProtonDbData(appId: number) {
-  const result = {
-    tier: 'Unknown', confidence: 'Unknown', totalReports: 0,
-    recommendedProton: 'Unavailable', tinkerSteps: 'No ProtonDB data loaded.',
-    url: `https://www.protondb.com/app/${appId}`,
+const STEAM_DECK_LOC_TOKENS: Record<string, string> = {
+  '#SteamDeckVerified_TestResult_DefaultControllerConfigFullyFunctional': 'Default controller configuration is fully functional.',
+  '#SteamDeckVerified_TestResult_ControllerGlyphsMatchDeckDevice': 'In-game interface shows Steam Deck controller icons.',
+  '#SteamDeckVerified_TestResult_ControllerGlyphsDoNotMatchDeckDevice': 'In-game menus may show non-Deck controller glyphs.',
+  '#SteamDeckVerified_TestResult_InterfaceTextIsLegible': 'In-game text is legible on the 7-inch/7.4-inch display.',
+  '#SteamDeckVerified_TestResult_InterfaceTextIsNotLegible': 'Some in-game text may be small on the handheld screen.',
+  '#SteamDeckVerified_TestResult_DefaultConfigurationIsPerformant': 'Default graphics configuration performs smoothly on Steam Deck hardware.',
+  '#SteamDeckVerified_TestResult_ManualGraphicsConfigRequired': 'Manual graphics adjustment needed for optimal frame rate.',
+  '#SteamDeckVerified_TestResult_TextInputDoesNotAutomaticallyInvokesKeyboard': 'Entering text requires manually invoking the on-screen keyboard (STEAM + X).',
+  '#SteamDeckVerified_TestResult_UnsupportedAntiCheatConfiguration': 'Unsupported anti-cheat software prevents execution on SteamOS/Linux.',
+  '#SteamDeckVerified_TestResult_LauncherInteractionTouchscreen': 'First-time setup or launcher requires touchscreen or virtual trackpad.',
+  '#SteamDeckVerified_TestResult_ActiveInternetConnectionRequired': 'Requires an active internet connection for initial setup or online features.',
+  '#SteamDeckVerified_TestResult_ExternalControllersNotSupportedPrimaryPlayer': 'External controller input requires manual assignment in Steam controller settings.',
+  '#SteamDeckVerified_TestResult_SingleplayerGameplayFunctional': 'Singleplayer modes are fully functional on Steam Deck.'
+};
+
+interface DeckAndProtonResult {
+  deckStatus: 'Verified' | 'Playable' | 'Unsupported' | 'Unknown';
+  protonDB: {
+    tier: 'Native' | 'Platinum' | 'Gold' | 'Silver' | 'Bronze' | 'Borked' | 'Unknown';
+    confidence: 'Strong' | 'High' | 'Good' | 'Moderate' | 'Unknown';
+    totalReports: number;
+    recommendedProton: string;
+    launchOptions: string;
+    deckFpsAverage: string;
+    tinkerSteps: string;
+    url: string;
   };
-  try {
-    const response = await fetch(`https://www.protondb.com/api/v1/reports/summaries/${appId}.json`);
-    const data = response.ok ? await response.json() : null;
-    if (data?.tier) result.tier = data.tier.charAt(0).toUpperCase() + data.tier.slice(1);
-    if (data?.confidence) result.confidence = data.confidence.charAt(0).toUpperCase() + data.confidence.slice(1);
-    result.totalReports = Number(data?.total || 0);
-  } catch {}
+}
+
+async function fetchDeckAndProtonInfo(appId: number, nativeLinux: boolean = false): Promise<DeckAndProtonResult> {
+  const cacheKey = `deck_proton_v3_${appId}_${nativeLinux}`;
+  const cached = getCached<DeckAndProtonResult>(cacheKey);
+  if (cached) return cached;
+
+  const [deckRes, protonRes] = await Promise.all([
+    fetch(`https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=${appId}`, {
+      headers: { 'User-Agent': 'Steam Analytics/1.0' }
+    }).catch(() => null),
+    fetch(`https://www.protondb.com/api/v1/reports/summaries/${appId}.json`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    }).catch(() => null)
+  ]);
+
+  let deckCategory = 0;
+  let resolvedItems: any[] = [];
+  if (deckRes && deckRes.ok) {
+    try {
+      const data = await deckRes.json();
+      deckCategory = Number(data?.results?.resolved_category || 0);
+      resolvedItems = Array.isArray(data?.results?.resolved_items) ? data.results.resolved_items : [];
+    } catch {}
+  }
+
+  let tier: 'Native' | 'Platinum' | 'Gold' | 'Silver' | 'Bronze' | 'Borked' | 'Unknown' = 'Unknown';
+  let confidence: 'Strong' | 'High' | 'Good' | 'Moderate' | 'Unknown' = 'Unknown';
+  let totalReports = 0;
+  if (protonRes && protonRes.ok) {
+    try {
+      const pData = await protonRes.json();
+      if (pData?.tier) {
+        const t = pData.tier.charAt(0).toUpperCase() + pData.tier.slice(1);
+        if (['Native', 'Platinum', 'Gold', 'Silver', 'Bronze', 'Borked'].includes(t)) {
+          tier = t as any;
+        }
+      }
+      if (pData?.confidence) {
+        const c = pData.confidence.charAt(0).toUpperCase() + pData.confidence.slice(1);
+        if (['Strong', 'High', 'Good', 'Moderate'].includes(c)) {
+          confidence = c as any;
+        }
+      }
+      totalReports = Number(pData?.total || 0);
+    } catch {}
+  }
+
+  if (nativeLinux && tier === 'Unknown') {
+    tier = 'Native';
+  }
+
+  let deckStatus: 'Verified' | 'Playable' | 'Unsupported' | 'Unknown' = 'Unknown';
+  if (deckCategory === 3) deckStatus = 'Verified';
+  else if (deckCategory === 2) deckStatus = 'Playable';
+  else if (deckCategory === 1) deckStatus = 'Unsupported';
+  else if (nativeLinux || tier === 'Native' || tier === 'Platinum') deckStatus = 'Verified';
+  else if (tier === 'Gold' || tier === 'Silver') deckStatus = 'Playable';
+  else if (tier === 'Borked') deckStatus = 'Unsupported';
+
+  const result: DeckAndProtonResult = {
+    deckStatus,
+    protonDB: {
+      tier,
+      confidence,
+      totalReports,
+      url: `https://www.protondb.com/app/${appId}`
+    }
+  };
+
+  setCache(cacheKey, result, 12 * 60 * 60 * 1000);
   return result;
+}
+
+async function fetchProtonDbData(appId: number) {
+  const info = await fetchDeckAndProtonInfo(appId);
+  return info.protonDB;
+}
+
+async function fetchSteamDeckStatus(
+  appId: number, 
+  protonTier?: string, 
+  nativeLinux?: boolean
+): Promise<'Verified' | 'Playable' | 'Unsupported' | 'Unknown'> {
+  const info = await fetchDeckAndProtonInfo(appId, Boolean(nativeLinux));
+  return info.deckStatus;
 }
 
 async function fetchSteamChartsData(appId: number, currentPlayers: number) {
@@ -203,71 +303,36 @@ async function fetchSteamChartsData(appId: number, currentPlayers: number) {
       }
     } catch {}
 
-    // 2. Fetch Historical Charts from Games-Popularity API
-    const apiKey = process.env.GAMES_POPULARITY_API_KEY || 'fd36bac7-fb7d-4b1c-86ab-6be618add21f';
-    const gpRes = await fetch(`https://games-popularity.com/swagger/api/game/players/${appId}`, { headers: { 'ApiKey': apiKey } });
-    if (gpRes.ok) {
-      const gpData = await gpRes.json();
-      if (gpData && Array.isArray(gpData.history)) {
-        // The API returns history descending by time (newest first). We need ascending (oldest first).
-        const sortedHistory = gpData.history
-          .map((h: any) => ({
-            timestamp: new Date(h.added).getTime(),
-            players: h.players,
-          }))
-          .sort((a: any, b: any) => a.timestamp - b.timestamp);
-          
-        if (sortedHistory.length > 0) {
-          // 24h history (last 24 hourly points)
-          result.playerHistory24h = sortedHistory.slice(-24).map((point: any) => ({
-            time: new Date(point.timestamp).toISOString().slice(11, 16),
-            players: point.players
-          }));
+    // 2. Fetch Historical Charts from SteamCharts
+    try {
+      const scRes = await fetch(`https://steamcharts.com/app/${appId}/chart-data.json`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (scRes.ok) {
+        const scData = await scRes.json();
+        const now = Date.now();
+        const last24h = scData.filter((d: any) => d[0] >= now - 24 * 3600 * 1000);
+        const last7d = scData.filter((d: any) => d[0] >= now - 7 * 24 * 3600 * 1000);
 
-          // 7d history (last 168 hourly points mapped to date strings)
-          result.playerHistory7d = sortedHistory.slice(-168).map((point: any) => ({
-            time: new Date(point.timestamp).toISOString().slice(0, 10),
-            players: point.players
+        if (last24h.length > 0) {
+          result.playerHistory24h = last24h.map((d: any) => ({
+            time: new Date(d[0]).toISOString().slice(11, 16),
+            players: d[1]
+          }));
+        }
+        
+        if (last7d.length > 0) {
+          result.playerHistory7d = last7d.map((d: any) => ({
+            time: new Date(d[0]).toISOString().slice(0, 10),
+            players: d[1]
           }));
         }
       }
+    } catch (err) {
+      console.warn(`Failed to fetch history for ${appId} from SteamCharts:`, err);
     }
   } catch (err) {
-    console.warn(`Failed to fetch history for ${appId}:`, err);
-  }
-
-  // Fallback: If external history API is unavailable or rate-limited, generate realistic 24h diurnal and 7d curves
-  if (result.playerHistory24h.length === 0 && currentPlayers > 0) {
-    const now = Date.now();
-    // Diurnal multipliers: trough at 04:00-06:00 UTC (~0.65), peak at 18:00-20:00 UTC (~1.20)
-    const diurnalCurve = [0.75, 0.70, 0.65, 0.62, 0.64, 0.70, 0.78, 0.88, 0.96, 1.04, 1.12, 1.18, 1.22, 1.20, 1.16, 1.12, 1.06, 1.00, 0.94, 0.90, 0.86, 0.82, 0.78, 1.0];
-    const currentUtcHour = new Date(now).getUTCHours();
-    const currentMultiplier = diurnalCurve[currentUtcHour % 24] || 1.0;
-
-    result.playerHistory24h = Array.from({ length: 24 }, (_, i) => {
-      const pointTime = new Date(now - (23 - i) * 3600 * 1000);
-      const hour = pointTime.getUTCHours();
-      const pointMultiplier = diurnalCurve[hour % 24];
-      const scaled = i === 23 
-        ? currentPlayers 
-        : Math.round(currentPlayers * (pointMultiplier / currentMultiplier));
-      return {
-        time: pointTime.toISOString().slice(11, 16),
-        players: Math.max(1, scaled),
-      };
-    });
-
-    result.playerHistory7d = Array.from({ length: 7 }, (_, i) => {
-      const pointTime = new Date(now - (6 - i) * 24 * 3600 * 1000);
-      const dayOfWeek = pointTime.getUTCDay(); // 0 = Sun, 6 = Sat
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      const dayMultiplier = isWeekend ? 1.20 : (dayOfWeek === 5 ? 1.08 : 0.94);
-      const scaled = i === 6 ? currentPlayers : Math.round(currentPlayers * dayMultiplier);
-      return {
-        time: pointTime.toISOString().slice(0, 10),
-        players: Math.max(1, scaled),
-      };
-    });
+    console.warn(`Failed to fetch charts for ${appId}:`, err);
   }
   
   return result;
@@ -427,11 +492,13 @@ app.get('/api/steam/dashboard', async (req, res) => {
         } catch (itdaErr) {
           // I TAD unavailable, fall back to 0
         }
-        const [reviews, protonDB, steamCharts] = await Promise.all([
+        const [reviews, deckAndProton, steamCharts] = await Promise.all([
           fetchSteamReviewData(appId),
-          fetchProtonDbData(appId),
+          fetchDeckAndProtonInfo(appId, Boolean(d.platforms?.linux)),
           fetchSteamChartsData(appId, currentPlayers),
         ]);
+        const { deckStatus, protonDB } = deckAndProton;
+
         const genres = (d.genres || []).map((genre: any) => genre.description);
         const categories = (d.categories || []).map((category: any) => category.description);
         const price = d.price_overview ? d.price_overview.final / 100 : 0;
@@ -461,7 +528,7 @@ app.get('/api/steam/dashboard', async (req, res) => {
           publisher: d.publishers?.[0] || 'Publisher unavailable',
           genres,
           tags: [...new Set([...genres, ...categories])].slice(0, 10),
-          deckStatus: d.platforms?.linux ? 'Verified' : 'Unknown',
+          deckStatus,
           protonDB,
           reviewHistory: reviews.reviewHistory,
           monthlyHistory: reviews.monthlyHistory,
@@ -719,15 +786,13 @@ app.get('/api/steam/topwishlist', async (req, res) => {
       const match = it.logo?.match(/\/apps\/(\d+)\//);
       const id = match ? parseInt(match[1], 10) : null;
       if (!id) continue;
-      // High-precision community follower metric proportional to global wishlist rank
-      const followers = Math.round(480000 * Math.pow(0.945, i) + (id % 4500));
+      
       items.push({
         id,
         steamId: id,
         position: i + 1,
         name: it.name,
         logo: it.logo || `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${id}/capsule_231x87.jpg`,
-        followers,
       });
     }
 
@@ -1017,27 +1082,6 @@ app.get('/api/steam/calculator', async (req, res) => {
       return res.json({ success: true, profile: cached });
     }
 
-    // Check if userQuery matches one of our rich featured presets
-    const lowerQuery = userQuery.toLowerCase();
-    let presetKey = '';
-    if (lowerQuery === 'gabelogannewell' || lowerQuery === '76561197960287930') {
-      presetKey = 'gabelogannewell';
-    } else if (lowerQuery === 'robinwalker' || lowerQuery === '76561197960435530') {
-      presetKey = 'robinwalker';
-    } else if (lowerQuery === '76561198000000001' || lowerQuery === 'f00l1sh_n1nj4') {
-      presetKey = '76561198000000001';
-    } else if (lowerQuery === 'indiegamer' || lowerQuery === '76561198011468818' || lowerQuery === 'leeroy') {
-      presetKey = 'indiegamer';
-    }
-
-    if (presetKey) {
-      const presetProfile = getFormattedPresetProfile(presetKey);
-      if (presetProfile) {
-        setCache(cacheKey, presetProfile, 15 * 60 * 1000);
-        return res.json({ success: true, profile: presetProfile });
-      }
-    }
-
     // Dynamic fetch for any Steam profile
     const isSteamId64 = /^\d{17}$/.test(userQuery);
     const targetUrl = isSteamId64 
@@ -1291,11 +1335,12 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       }
     } catch {}
 
-    const [reviews, protonDB, steamCharts] = await Promise.all([
+    const [reviews, deckAndProton, steamCharts] = await Promise.all([
       fetchSteamReviewData(appId),
-      fetchProtonDbData(appId),
+      fetchDeckAndProtonInfo(appId, Boolean(d.platforms?.linux)),
       fetchSteamChartsData(appId, currentPlayers),
     ]);
+    const { deckStatus, protonDB } = deckAndProton;
 
     // Fetch historical low from IsThereAnyDeal
     let historicalLow = 0;
@@ -1371,15 +1416,18 @@ app.get('/api/steam/game/:appid', async (req, res) => {
     const categories = (d.categories || []).map((c: any) => c.description);
     const tags = Array.from(new Set([...genres, ...categories])).slice(0, 10);
 
-    const deckStatus = (d.platforms?.linux || protonDB.tier === 'Platinum' || protonDB.tier === 'Native') 
-      ? 'Verified' 
-      : protonDB.tier === 'Unknown' ? 'Unknown' : (protonDB.tier === 'Gold' || protonDB.tier === 'Silver' ? 'Playable' : 'Unsupported');
-
     const cleanDescription = (d.short_description || '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
       .trim();
+
+    const trailers = (d.movies || []).map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      videoUrl: m.hls_h264 || m.mp4?.max || m.mp4?.['480'] || `https://video.akamai.steamstatic.com/store_trailers/${m.id}/movie_max.mp4`,
+      thumbnail: m.thumbnail
+    })).filter((t: any) => t.videoUrl);
 
     const fullGame = {
       id: d.steam_appid,
@@ -1407,6 +1455,7 @@ app.get('/api/steam/game/:appid', async (req, res) => {
       tags,
       deckStatus,
       protonDB,
+      trailers,
       reviewHistory: reviews.reviewHistory,
       monthlyHistory: reviews?.monthlyHistory || reviews.reviewHistory,
       dailyHistory: reviews?.dailyHistory || [],
@@ -1456,7 +1505,7 @@ app.get('/api/steam/releases', async (req, res) => {
             developer: item.developer || 'Developer unavailable',
             followers: item.followers || 0,
             hypeScore: 0,
-            tags: ['Coming Soon', 'Steam Store', 'Wishlisted'],
+            tags: [],
             headerImage: item.header_image || item.large_capsule_image || `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${item.id}/header.jpg`,
             price: item.final_price ? item.final_price / 100 : 0,
             discountPercent: item.discount_percent || 0,
@@ -1487,7 +1536,7 @@ app.get('/api/steam/releases', async (req, res) => {
               developer: 'Developer unavailable',
               followers: 0,
               hypeScore: 0,
-              tags: ['Top Wishlisted', 'Anticipated', 'Next-Gen'],
+              tags: [],
               headerImage: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
               price: 0,
               discountPercent: 0,
@@ -1545,125 +1594,50 @@ app.get('/api/steam/concurrent-activity', async (req, res) => {
   try {
     const timeframe = (req.query.timeframe as string) || 'day';
     const globalStats = await fetchSteamGlobalStats();
-    const liveInGame = globalStats.inGame;
+    
+    // Fetch live userdata from steam
+    const userdataRes = await fetch('https://store.steampowered.com/stats/userdata.json', {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    
+    if (!userdataRes.ok) {
+      throw new Error(`Failed to fetch Steam userdata`);
+    }
+    
+    const userdata = await userdataRes.json();
+    const series = userdata[0]?.data || []; // Array of [timestamp, count]
+    
+    if (series.length === 0) {
+      throw new Error('No userdata found');
+    }
 
     let dataPoints: { label: string; players: number; trend: number; peak?: number }[] = [];
-    let currentCount = liveInGame;
-    let peakCount = Math.round(liveInGame * 1.22);
-    let avgCount = Math.round(liveInGame * 0.92);
-    let trendPercent = '+4.2%';
-
-    if (timeframe === 'day') {
-      const hours = ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', 'Now'];
-      // Scale standard daily Steam diurnal curve to current live in-game value
-      // 04:00 UTC is diurnal trough (~63%), 18:00 UTC is European peak (~118%)
-      const ratios = [0.72, 0.67, 0.63, 0.66, 0.76, 0.88, 0.98, 1.06, 1.14, 1.18, 1.10, 1.04, 1.0];
-      const baseValues = hours.map((_, idx) => {
-        if (idx === hours.length - 1) return liveInGame;
-        return Math.round(liveInGame * (ratios[idx] / ratios[ratios.length - 1]));
-      });
-      
-      // Calculate linear regression trend line
-      const n = baseValues.length;
-      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-      for (let i = 0; i < n; i++) {
-        sumX += i;
-        sumY += baseValues[i];
-        sumXY += i * baseValues[i];
-        sumX2 += i * i;
-      }
-      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-      const intercept = (sumY - slope * sumX) / n;
-
-      dataPoints = hours.map((hour, idx) => ({
-        label: hour,
-        players: baseValues[idx],
-        trend: Math.round(intercept + slope * idx),
-      }));
-      peakCount = Math.max(...baseValues);
-      avgCount = Math.round(sumY / n);
-      currentCount = liveInGame;
-      trendPercent = '+4.5%';
-    } else if (timeframe === 'week') {
-      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const ratios = [0.92, 0.94, 0.96, 0.98, 1.08, 1.20, 1.15];
-      const baseValues = days.map((_, idx) => Math.round(liveInGame * ratios[idx]));
-      const n = baseValues.length;
-      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-      for (let i = 0; i < n; i++) {
-        sumX += i; sumY += baseValues[i]; sumXY += i * baseValues[i]; sumX2 += i * i;
-      }
-      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-      const intercept = (sumY - slope * sumX) / n;
-
-      dataPoints = days.map((day, idx) => ({
-        label: day,
-        players: baseValues[idx],
-        trend: Math.round(intercept + slope * idx),
-      }));
-      peakCount = Math.max(...baseValues);
-      avgCount = Math.round(sumY / n);
-      currentCount = liveInGame;
-      trendPercent = '+6.8%';
-    } else if (timeframe === 'month') {
-      const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-      const ratios = [0.93, 0.96, 1.02, 1.05];
-      const baseValues = weeks.map(w => Math.round(liveInGame * ratios[weeks.indexOf(w)]));
-      dataPoints = weeks.map((w, idx) => ({
-        label: w,
-        players: baseValues[idx],
-        trend: Math.round(liveInGame * 0.92 + idx * (liveInGame * 0.04)),
-      }));
-      peakCount = Math.max(...baseValues);
-      avgCount = Math.round(baseValues.reduce((a, b) => a + b, 0) / weeks.length);
-      currentCount = liveInGame;
-      trendPercent = '+5.8%';
-    } else if (timeframe === 'year') {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const ratios = [0.95, 0.98, 1.02, 0.99, 0.92, 0.96, 1.01, 1.04, 1.06, 1.05, 1.10, 1.16];
-      const baseValues = months.map((_, idx) => Math.round(liveInGame * ratios[idx]));
-      const n = baseValues.length;
-      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-      for (let i = 0; i < n; i++) {
-        sumX += i; sumY += baseValues[i]; sumXY += i * baseValues[i]; sumX2 += i * i;
-      }
-      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-      const intercept = (sumY - slope * sumX) / n;
-
-      dataPoints = months.map((m, idx) => ({
-        label: m,
-        players: baseValues[idx],
-        trend: Math.round(intercept + slope * idx),
-      }));
-      peakCount = Math.max(...baseValues);
-      avgCount = Math.round(sumY / n);
-      currentCount = liveInGame;
-      trendPercent = '+14.2%';
-    } else { // 'all_time'
-      const years = ['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026'];
-      const baseValues = [4200000, 4800000, 5600000, 6100000, 7200000, 7800000, 8400000, 8900000, 9600000, 10200000, liveInGame];
-      const n = baseValues.length;
-      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-      for (let i = 0; i < n; i++) {
-        sumX += i; sumY += baseValues[i]; sumXY += i * baseValues[i]; sumX2 += i * i;
-      }
-      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-      const intercept = (sumY - slope * sumX) / n;
-
-      dataPoints = years.map((y, idx) => ({
-        label: y,
-        players: baseValues[idx],
-        trend: Math.round(intercept + slope * idx),
-      }));
-      peakCount = Math.max(...baseValues);
-      avgCount = Math.round(sumY / n);
-      currentCount = liveInGame;
-      trendPercent = '+82.5%';
-    }
+    
+    // Only 'day' (48 hours) is supported by actual Steam API
+    // We sample every 2 hours roughly to not overwhelm the graph
+    const sampled = series.filter((_: any, idx: number) => idx % 12 === 0);
+    
+    dataPoints = sampled.map((point: any, idx: number) => {
+      const d = new Date(point[0]);
+      return {
+        label: `${d.getHours().toString().padStart(2, '0')}:00`,
+        players: point[1]
+      };
+    });
+    
+    const allCounts = series.map((p: any) => p[1]);
+    const peakCount = Math.max(...allCounts);
+    const avgCount = Math.round(allCounts.reduce((a: number, b: number) => a + b, 0) / allCounts.length);
+    const currentCount = allCounts[allCounts.length - 1];
+    
+    // Calculate trend percentage over 48h
+    const firstCount = allCounts[0];
+    const trendValue = ((currentCount - firstCount) / Math.max(1, firstCount)) * 100;
+    const trendPercent = (trendValue > 0 ? '+' : '') + trendValue.toFixed(1) + '%';
 
     res.json({
       success: true,
-      timeframe,
+      timeframe: 'day', // Force day
       currentCount,
       peakCount,
       avgCount,

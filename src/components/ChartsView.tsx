@@ -96,6 +96,18 @@ export const ChartsView = ({
     return games.filter(g => g.deckStatus === 'Verified').length;
   }, [games]);
 
+  const playableCount = useMemo(() => {
+    return games.filter(g => g.deckStatus === 'Verified' || g.deckStatus === 'Playable' || g.protonDB?.tier === 'Native' || g.protonDB?.tier === 'Platinum' || g.protonDB?.tier === 'Gold').length;
+  }, [games]);
+
+  const nativeOrGoldCount = useMemo(() => {
+    return games.filter(g => g.protonDB?.tier === 'Native' || g.protonDB?.tier === 'Platinum' || g.protonDB?.tier === 'Gold').length;
+  }, [games]);
+
+  const playablePercent = games.length > 0 ? Math.round((playableCount / games.length) * 100) : 0;
+  const nativeOrGoldPercent = games.length > 0 ? Math.round((nativeOrGoldCount / games.length) * 100) : 0;
+  const verifiedPercent = games.length > 0 ? Math.round((verifiedCount / games.length) * 100) : 0;
+
   // Filtering & Sorting
   const processedGames = useMemo(() => {
     return games
@@ -149,12 +161,14 @@ export const ChartsView = ({
         </h2>
         <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg overflow-hidden p-1">
           <button 
+            id="charts-view-bento-btn"
             onClick={() => setViewMode('bento')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'bento' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Bento View
           </button>
           <button 
+            id="charts-view-dense-btn"
             onClick={() => setViewMode('dense')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === 'dense' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
           >
@@ -290,22 +304,7 @@ export const ChartsView = ({
               </div>
             </div>
 
-            {/* Time Filter: Day, Week, Month, Year, All Time */}
-            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-2xl border border-slate-800 self-start sm:self-auto">
-              {(['day', 'week', 'month', 'year', 'all_time'] as ConcurrentTimeframe[]).map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setConcurrentTimeframe(tf)}
-                  className={`px-3 py-1 rounded-xl text-xs font-mono font-bold capitalize transition-all ${
-                    concurrentTimeframe === tf
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {tf === 'all_time' ? 'All Time' : tf}
-                </button>
-              ))}
-            </div>
+            {/* Removed time filter since only 48h of real Steam telemetry is available globally */}
           </div>
 
           {/* Actual Player Count Numbers Display */}
@@ -389,15 +388,6 @@ export const ChartsView = ({
                   fill="url(#chartPlayerGradient)" 
                   name="players"
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="trend" 
-                  stroke="#f59e0b" 
-                  strokeWidth={2.5} 
-                  strokeDasharray="4 4" 
-                  dot={false}
-                  name="trend"
-                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -407,10 +397,6 @@ export const ChartsView = ({
               <span className="flex items-center gap-1.5 text-blue-400 font-semibold">
                 <span className="w-3 h-1.5 bg-blue-500 rounded-full inline-block"></span>
                 Actual Players
-              </span>
-              <span className="flex items-center gap-1.5 text-amber-400 font-semibold">
-                <span className="w-3 h-0.5 bg-amber-400 border-b border-dashed border-amber-400 inline-block"></span>
-                Regression Trend Line
               </span>
             </div>
             <span className="text-slate-500 hidden sm:inline">Steam Ecosystem Telemetry</span>
@@ -464,18 +450,18 @@ export const ChartsView = ({
               {verifiedCount} of {games.length} Steam Deck Verified
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              100% of top chart titles are playable on Linux via ProtonDB custom configurations.
+              {playablePercent}% ({playableCount} of {games.length}) of top chart titles are playable on Linux via Proton & SteamOS.
             </p>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
             <div className="px-4 py-2 bg-slate-950 rounded-2xl border border-slate-800 text-center">
-              <div className="text-xs font-mono font-bold text-green-400">100%</div>
+              <div className="text-xs font-mono font-bold text-green-400">{nativeOrGoldPercent}%</div>
               <div className="text-[10px] text-slate-500 uppercase">Native/Gold+</div>
             </div>
             <div className="px-4 py-2 bg-slate-950 rounded-2xl border border-slate-800 text-center">
-              <div className="text-xs font-mono font-bold text-purple-400">Tier 1</div>
-              <div className="text-[10px] text-slate-500 uppercase">Proton Support</div>
+              <div className="text-xs font-mono font-bold text-purple-400">{verifiedPercent}%</div>
+              <div className="text-[10px] text-slate-500 uppercase">Verified Rate</div>
             </div>
           </div>
         </div>
@@ -536,6 +522,7 @@ export const ChartsView = ({
           {/* Discount checkbox */}
           <label className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 cursor-pointer select-none text-slate-300 hover:border-slate-700 transition-colors">
             <input 
+              id="filter-discount-only"
               type="checkbox" 
               checked={discountOnly} 
               onChange={(e) => setDiscountOnly(e.target.checked)} 
@@ -651,7 +638,10 @@ export const ChartsView = ({
                           <div className="min-w-0">
                             <div className="font-semibold text-slate-100 text-sm group-hover:text-blue-400 transition-colors flex items-center gap-1.5 flex-wrap">
                               <span>{game.name}</span>
-                              <span className={`text-[10px] px-1.5 py-0.2 rounded-full border font-medium ${deckBadge.bg} ${deckBadge.text} ${deckBadge.border}`}>
+                              <span 
+                                title={`Steam Deck Status: ${deckBadge.label}`}
+                                className={`text-[10px] px-1.5 py-0.2 rounded-full border font-medium ${deckBadge.bg} ${deckBadge.text} ${deckBadge.border}`}
+                              >
                                 {deckBadge.label}
                               </span>
                             </div>
