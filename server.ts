@@ -1690,6 +1690,16 @@ app.get('/api/steam/currencies', async (_req, res) => {
 
 // Vite middleware / static fallback
 async function startServer() {
+  const publicPath = path.join(process.cwd(), 'public');
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+  }
+
+  // Explicit favicon handler for browser default requests
+  app.get('/favicon.ico', (_req, res) => {
+    res.sendFile(path.join(publicPath, 'favicon.svg'));
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
